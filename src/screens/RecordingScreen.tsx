@@ -28,7 +28,6 @@ export default function RecordingScreen({
     const [cameraType, setCameraType] = useState<'front' | 'back'>(initialCameraType);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
-    const [videoUri, setVideoUri] = useState<string | undefined>();
 
     // Timer for call duration
     useEffect(() => {
@@ -41,9 +40,9 @@ export default function RecordingScreen({
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    // Start recording on mount
+    // No auto-start here, let onCameraReady handle it
     useEffect(() => {
-        startRecording();
+        // initialize storage directory
     }, []);
 
     const startRecording = async () => {
@@ -51,18 +50,21 @@ export default function RecordingScreen({
 
         try {
             console.log('Starting recording...');
+            setIsRecording(true);
             const video = await cameraRef.current.recordAsync({
                 maxDuration: 3600, // 1 hour max
             });
 
             if (video?.uri) {
                 console.log('Recording completed:', video.uri);
-                setVideoUri(video.uri);
-                setIsRecording(false);
+                onRecordingComplete(video.uri);
             }
         } catch (error) {
             console.error('Error starting recording:', error);
+            setIsRecording(false);
             Alert.alert('Recording Error', 'Failed to start video recording.');
+        } finally {
+            setIsRecording(false);
         }
     };
 
@@ -71,14 +73,9 @@ export default function RecordingScreen({
 
         try {
             console.log('Stopping recording...');
-            cameraRef.current.stopRecording();
-
-            // Wait a moment for video URI to be set
-            setTimeout(() => {
-                if (videoUri) {
-                    onRecordingComplete(videoUri);
-                }
-            }, 500);
+            if (cameraRef.current) {
+                cameraRef.current.stopRecording();
+            }
         } catch (error) {
             console.error('Error stopping recording:', error);
             Alert.alert('Recording Error', 'Failed to stop video recording.');
@@ -86,21 +83,7 @@ export default function RecordingScreen({
     };
 
     const handleEndCall = () => {
-        Alert.alert(
-            'End Recording?',
-            'This will stop the recording and save the video.',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel',
-                },
-                {
-                    text: 'End',
-                    style: 'destructive',
-                    onPress: stopRecording,
-                },
-            ]
-        );
+        stopRecording();
     };
 
     const handleToggleFlash = () => {
@@ -115,24 +98,24 @@ export default function RecordingScreen({
 
     return (
         <View style={styles.container}>
-            {currentView === 'fake-call' ? (
-                <>
-                    {/* Hidden camera view for recording */}
-                    <View style={styles.hiddenCamera}>
-                        <CameraView
-                            ref={cameraRef}
-                            style={styles.camera}
-                            facing={cameraType}
-                            mode="video"
-                            enableTorch={flashEnabled}
-                            onCameraReady={() => {
-                                console.log('Camera ready');
-                                setIsRecording(true);
-                            }}
-                        />
-                    </View>
+            {/* The single persistent CameraView */}
+            <View style={currentView === 'fake-call' ? styles.hiddenCamera : styles.fullCamera}>
+                <CameraView
+                    ref={cameraRef}
+                    style={styles.camera}
+                    facing={cameraType}
+                    mode="video"
+                    enableTorch={flashEnabled}
+                    onCameraReady={() => {
+                        console.log('Camera ready');
+                        startRecording();
+                    }}
+                />
+            </View>
 
-                    {/* Fake call interface */}
+            {/* Overlays */}
+            {currentView === 'fake-call' && (
+                <View style={StyleSheet.absoluteFill}>
                     <FakeCallInterface
                         callerName={callerName}
                         callerNumber={callerNumber}
@@ -142,15 +125,18 @@ export default function RecordingScreen({
                         onToggleView={handleToggleView}
                         flashEnabled={flashEnabled}
                     />
-                </>
-            ) : (
-                <CameraPreview
-                    cameraRef={cameraRef}
-                    cameraType={cameraType}
-                    flashEnabled={flashEnabled}
-                    onToggleView={handleToggleView}
-                    isRecording={isRecording}
-                />
+                </View>
+            )}
+
+            {currentView === 'camera-preview' && (
+                <View style={StyleSheet.absoluteFill}>
+                    <CameraPreview
+                        cameraType={cameraType}
+                        flashEnabled={flashEnabled}
+                        onToggleView={handleToggleView}
+                        isRecording={isRecording}
+                    />
+                </View>
             )}
         </View>
     );
@@ -159,12 +145,17 @@ export default function RecordingScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#000',
+    },
+    fullCamera: {
+        ...StyleSheet.absoluteFillObject,
     },
     hiddenCamera: {
         position: 'absolute',
         width: 1,
         height: 1,
         opacity: 0,
+        zIndex: -1,
     },
     camera: {
         flex: 1,

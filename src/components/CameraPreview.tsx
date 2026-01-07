@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing } from '../constants/styles';
 
 interface CameraPreviewProps {
-    cameraRef: React.RefObject<CameraView>;
     cameraType: 'front' | 'back';
     flashEnabled: boolean;
     onToggleView: () => void;
@@ -13,7 +12,6 @@ interface CameraPreviewProps {
 }
 
 export default function CameraPreview({
-    cameraRef,
     cameraType,
     flashEnabled,
     onToggleView,
@@ -21,56 +19,48 @@ export default function CameraPreview({
 }: CameraPreviewProps) {
     return (
         <View style={styles.container}>
-            <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-                facing={cameraType}
-                mode="video"
-                enableTorch={flashEnabled}
-            >
-                {/* Overlay UI */}
-                <View style={styles.overlay}>
-                    {/* Toggle back to fake call button */}
-                    <TouchableOpacity
-                        style={styles.toggleButton}
-                        onPress={onToggleView}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="call" size={20} color={Colors.text} />
-                        <Text style={styles.toggleText}>Back to Call</Text>
-                    </TouchableOpacity>
+            {/* Overlay UI */}
+            <View style={styles.overlay}>
+                {/* Toggle back to fake call button */}
+                <TouchableOpacity
+                    style={styles.toggleButton}
+                    onPress={onToggleView}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="call" size={20} color={Colors.text} />
+                    <Text style={styles.toggleText}>Back to Call</Text>
+                </TouchableOpacity>
 
-                    {/* Camera info */}
-                    <View style={styles.infoContainer}>
+                {/* Camera info */}
+                <View style={styles.infoContainer}>
+                    <View style={styles.infoRow}>
+                        <Ionicons
+                            name={cameraType === 'front' ? 'camera-reverse' : 'camera'}
+                            size={16}
+                            color={Colors.text}
+                        />
+                        <Text style={styles.infoText}>
+                            {cameraType === 'front' ? 'Front' : 'Rear'} Camera
+                        </Text>
+                    </View>
+
+                    {flashEnabled && (
                         <View style={styles.infoRow}>
-                            <Ionicons
-                                name={cameraType === 'front' ? 'camera-reverse' : 'camera'}
-                                size={16}
-                                color={Colors.text}
-                            />
-                            <Text style={styles.infoText}>
-                                {cameraType === 'front' ? 'Front' : 'Rear'} Camera
+                            <Ionicons name="flash" size={16} color={Colors.accent} />
+                            <Text style={[styles.infoText, { color: Colors.accent }]}>
+                                Flash On
                             </Text>
                         </View>
+                    )}
 
-                        {flashEnabled && (
-                            <View style={styles.infoRow}>
-                                <Ionicons name="flash" size={16} color={Colors.accent} />
-                                <Text style={[styles.infoText, { color: Colors.accent }]}>
-                                    Flash On
-                                </Text>
-                            </View>
-                        )}
-
-                        {isRecording && (
-                            <View style={styles.recordingIndicator}>
-                                <View style={styles.recordingDot} />
-                                <Text style={styles.recordingText}>REC</Text>
-                            </View>
-                        )}
-                    </View>
+                    {isRecording && (
+                        <View style={styles.recordingIndicator}>
+                            <View style={styles.recordingDot} />
+                            <Text style={styles.recordingText}>REC</Text>
+                        </View>
+                    )}
                 </View>
-            </CameraView>
+            </View>
         </View>
     );
 }
