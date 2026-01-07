@@ -69,7 +69,9 @@ export default function RecordingScreen({
     };
 
     const stopRecording = async () => {
-        if (!cameraRef.current || !isRecording) return;
+        if (!cameraRef.current || !isRecording) {
+            return;
+        }
 
         try {
             console.log('Stopping recording...');
@@ -99,7 +101,10 @@ export default function RecordingScreen({
     return (
         <View style={styles.container}>
             {/* The single persistent CameraView */}
-            <View style={currentView === 'fake-call' ? styles.hiddenCamera : styles.fullCamera}>
+            <View
+                style={currentView === 'fake-call' ? styles.hiddenCamera : styles.fullCamera}
+                pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
+            >
                 <CameraView
                     ref={cameraRef}
                     style={styles.camera}
@@ -115,28 +120,24 @@ export default function RecordingScreen({
 
             {/* Overlays */}
             {currentView === 'fake-call' && (
-                <View style={StyleSheet.absoluteFill}>
-                    <FakeCallInterface
-                        callerName={callerName}
-                        callerNumber={callerNumber}
-                        duration={duration}
-                        onEndCall={handleEndCall}
-                        onToggleFlash={handleToggleFlash}
-                        onToggleView={handleToggleView}
-                        flashEnabled={flashEnabled}
-                    />
-                </View>
+                <FakeCallInterface
+                    callerName={callerName}
+                    callerNumber={callerNumber}
+                    duration={duration}
+                    onEndCall={handleEndCall}
+                    onToggleFlash={handleToggleFlash}
+                    onToggleView={handleToggleView}
+                    flashEnabled={flashEnabled}
+                />
             )}
 
             {currentView === 'camera-preview' && (
-                <View style={StyleSheet.absoluteFill}>
-                    <CameraPreview
-                        cameraType={cameraType}
-                        flashEnabled={flashEnabled}
-                        onToggleView={handleToggleView}
-                        isRecording={isRecording}
-                    />
-                </View>
+                <CameraPreview
+                    cameraType={cameraType}
+                    flashEnabled={flashEnabled}
+                    onToggleView={handleToggleView}
+                    isRecording={isRecording}
+                />
             )}
         </View>
     );
