@@ -15,6 +15,7 @@ import { VideoFile } from '../types';
 import {
     listRecordings,
     deleteRecording,
+    shareRecording,
     formatFileSize,
     formatDuration,
     getStorageStats,
@@ -106,6 +107,13 @@ export default function RecordingsScreen({
                     onPress={() => onPlayVideo && onPlayVideo(item.uri)}
                 >
                     <Ionicons name="play-circle-outline" size={28} color={Colors.accent} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.actionIcon}
+                    onPress={() => shareRecording(item.uri)}
+                >
+                    <Ionicons name="share-social-outline" size={28} color={Colors.primary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity

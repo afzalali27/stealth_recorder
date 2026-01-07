@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ToastAndroid, Platform } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
@@ -57,12 +57,19 @@ export default function RecordingScreen({
 
             if (video?.uri) {
                 console.log('Recording completed:', video.uri);
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show('Recording saved to Gallery', ToastAndroid.SHORT);
+                }
                 onRecordingComplete(video.uri);
             }
         } catch (error) {
             console.error('Error starting recording:', error);
             setIsRecording(false);
-            Alert.alert('Recording Error', 'Failed to start video recording.');
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Starting recording failed', ToastAndroid.LONG);
+            } else {
+                Alert.alert('Recording Error', 'Failed to start video recording.');
+            }
         } finally {
             setIsRecording(false);
         }
@@ -100,44 +107,43 @@ export default function RecordingScreen({
 
     return (
         <View style={styles.container}>
-            {/* The single persistent CameraView */}
-            <View
-                style={currentView === 'fake-call' ? styles.hiddenCamera : styles.fullCamera}
-                pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
-            >
-                <CameraView
-                    ref={cameraRef}
-                    style={styles.camera}
-                    facing={cameraType}
-                    mode="video"
-                    enableTorch={flashEnabled}
-                    onCameraReady={() => {
-                        console.log('Camera ready');
-                        startRecording();
-                    }}
-                />
-            </View>
+            {/* The single persistent CameraView - Always full screen at bottom */}
+            <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={cameraType}
+                mode="video"
+                enableTorch={flashEnabled}
+                onCameraReady={() => {
+                    console.log('Camera ready');
+                    startRecording();
+                }}
+            />
 
-            {/* Overlays */}
+            {/* Overlays - On top of CameraView */}
             {currentView === 'fake-call' && (
-                <FakeCallInterface
-                    callerName={callerName}
-                    callerNumber={callerNumber}
-                    duration={duration}
-                    onEndCall={handleEndCall}
-                    onToggleFlash={handleToggleFlash}
-                    onToggleView={handleToggleView}
-                    flashEnabled={flashEnabled}
-                />
+                <View style={styles.overlayContainer}>
+                    <FakeCallInterface
+                        callerName={callerName}
+                        callerNumber={callerNumber}
+                        duration={duration}
+                        onEndCall={handleEndCall}
+                        onToggleFlash={handleToggleFlash}
+                        onToggleView={handleToggleView}
+                        flashEnabled={flashEnabled}
+                    />
+                </View>
             )}
 
             {currentView === 'camera-preview' && (
-                <CameraPreview
-                    cameraType={cameraType}
-                    flashEnabled={flashEnabled}
-                    onToggleView={handleToggleView}
-                    isRecording={isRecording}
-                />
+                <View style={styles.overlayContainer} pointerEvents="box-none">
+                    <CameraPreview
+                        cameraType={cameraType}
+                        flashEnabled={flashEnabled}
+                        onToggleView={handleToggleView}
+                        isRecording={isRecording}
+                    />
+                </View>
             )}
         </View>
     );
@@ -148,17 +154,12 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#000',
     },
-    fullCamera: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    hiddenCamera: {
-        position: 'absolute',
-        width: 1,
-        height: 1,
-        opacity: 0,
-        zIndex: -1,
-    },
     camera: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 1,
+    },
+    overlayContainer: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 2,
     },
 });

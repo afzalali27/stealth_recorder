@@ -1,4 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { VideoFile } from '../types';
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}recordings/`;
@@ -28,20 +30,33 @@ export function generateFilename(extension: string = 'mp4'): string {
 }
 
 /**
- * Save recorded video to recordings directory
+ * Save recorded video to public Media Library
  */
 export async function saveRecording(sourceUri: string): Promise<VideoFile> {
     try {
         await initializeStorage();
 
+        // 1. Copy to internal app storage first for record keeping
         const filename = generateFilename();
         const destinationUri = `${RECORDINGS_DIR}${filename}`;
 
-        // Move the video file to recordings directory
-        await FileSystem.moveAsync({
+        await FileSystem.copyAsync({
             from: sourceUri,
             to: destinationUri,
         });
+
+        // 2. Save to Media Library (Public Storage)
+        const permission = await MediaLibrary.requestPermissionsAsync();
+        if (permission.granted) {
+            const asset = await MediaLibrary.createAssetAsync(destinationUri);
+            const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
+            if (album === null) {
+                await MediaLibrary.createAlbumAsync('StealthRecorder', asset, false);
+            } else {
+                await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+            }
+            console.log('Saved to Media Library album: StealthRecorder');
+        }
 
         // Get file info
         const fileInfo = await FileSystem.getInfoAsync(destinationUri);
@@ -51,15 +66,31 @@ export async function saveRecording(sourceUri: string): Promise<VideoFile> {
             uri: destinationUri,
             filename,
             timestamp: Date.now(),
-            duration: 0, // Would need video metadata extraction
+            duration: 0,
             size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
             encrypted: false,
         };
 
-        console.log('Recording saved:', videoFile);
+        console.log('Recording saved internally:', videoFile);
         return videoFile;
     } catch (error) {
         console.error('Error saving recording:', error);
+        throw error;
+    }
+}
+
+/**
+ * Share a recording
+ */
+export async function shareRecording(uri: string): Promise<void> {
+    try {
+        const canShare = await Sharing.isAvailableAsync();
+        if (!canShare) {
+            throw new Error('Sharing is not available on this device');
+        }
+        await Sharing.shareAsync(uri);
+    } catch (error) {
+        console.error('Error sharing recording:', error);
         throw error;
     }
 }
