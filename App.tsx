@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar } from 'react-native';
+import { StatusBar, Alert } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import RecordingScreen from './src/screens/RecordingScreen';
+import RecordingsScreen from './src/screens/RecordingsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { saveRecording } from './src/services/StorageService';
-import { Alert } from 'react-native';
 import { Colors } from './src/constants/styles';
 
 export type RootStackParamList = {
@@ -50,12 +51,10 @@ export default function App() {
                   });
                 }}
                 onViewRecordings={() => {
-                  // TODO: Navigate to recordings screen
-                  Alert.alert('Coming Soon', 'Recordings viewer will be available soon');
+                  props.navigation.navigate('Recordings');
                 }}
                 onOpenSettings={() => {
-                  // TODO: Navigate to settings screen
-                  Alert.alert('Coming Soon', 'Settings screen will be available soon');
+                  props.navigation.navigate('Settings');
                 }}
               />
             )}
