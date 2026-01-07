@@ -1,6 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { Platform } from 'react-native';
 import { VideoFile } from '../types';
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}recordings/`;
@@ -91,6 +93,28 @@ export async function shareRecording(uri: string): Promise<void> {
         await Sharing.shareAsync(uri);
     } catch (error) {
         console.error('Error sharing recording:', error);
+        throw error;
+    }
+}
+
+/**
+ * Open file in system gallery/files app
+ */
+export async function openFile(uri: string): Promise<void> {
+    try {
+        if (Platform.OS === 'android') {
+            const contentUri = await FileSystem.getContentUriAsync(uri);
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                data: contentUri,
+                flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+                type: 'video/mp4',
+            });
+        } else {
+            // For iOS, sharing is the best we can do for direct file access
+            await shareRecording(uri);
+        }
+    } catch (error) {
+        console.error('Error opening file:', error);
         throw error;
     }
 }

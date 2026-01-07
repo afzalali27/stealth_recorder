@@ -6,7 +6,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import { saveRecording } from './src/services/StorageService';
+import { saveRecording, openFile } from './src/services/StorageService';
 import { Colors } from './src/constants/styles';
 
 export type RootStackParamList = {
@@ -69,28 +69,12 @@ export default function App() {
                 callerNumber={props.route.params?.callerNumber}
                 onRecordingComplete={async (videoUri) => {
                   try {
-                    const savedFile = await saveRecording(videoUri);
-                    Alert.alert(
-                      'Recording Saved',
-                      `Video saved successfully!\n\nSize: ${(savedFile.size / 1024 / 1024).toFixed(2)} MB`,
-                      [
-                        {
-                          text: 'OK',
-                          onPress: () => props.navigation.goBack(),
-                        },
-                      ]
-                    );
+                    await saveRecording(videoUri);
+                    // Landing to home page immediately as requested
+                    props.navigation.goBack();
                   } catch (error) {
-                    Alert.alert(
-                      'Error',
-                      'Failed to save recording',
-                      [
-                        {
-                          text: 'OK',
-                          onPress: () => props.navigation.goBack(),
-                        },
-                      ]
-                    );
+                    console.error('Failed to save recording:', error);
+                    props.navigation.goBack();
                   }
                 }}
               />
@@ -103,7 +87,7 @@ export default function App() {
                 {...props}
                 onBack={() => props.navigation.goBack()}
                 onPlayVideo={(uri) => {
-                  Alert.alert('Play Video', `Video URI: ${uri}\n\nVideo playback will be available in a future update.`);
+                  openFile(uri);
                 }}
               />
             )}

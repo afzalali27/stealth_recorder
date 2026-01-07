@@ -16,6 +16,7 @@ import {
     listRecordings,
     deleteRecording,
     shareRecording,
+    openFile,
     formatFileSize,
     formatDuration,
     getStorageStats,
@@ -107,6 +108,13 @@ export default function RecordingsScreen({
                     onPress={() => onPlayVideo && onPlayVideo(item.uri)}
                 >
                     <Ionicons name="play-circle-outline" size={28} color={Colors.accent} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.actionIcon}
+                    onPress={() => openFile(item.uri)}
+                >
+                    <Ionicons name="folder-open-outline" size={28} color={Colors.accent} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
