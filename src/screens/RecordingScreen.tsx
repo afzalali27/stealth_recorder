@@ -3,7 +3,6 @@ import { View, StyleSheet, Alert, ToastAndroid, Platform, TouchableOpacity } fro
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
-import CameraPreview from '../components/CameraPreview';
 import { RecordingState } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 

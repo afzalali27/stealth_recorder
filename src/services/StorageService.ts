@@ -49,26 +49,28 @@ export async function saveRecording(sourceUri: string): Promise<VideoFile> {
 
         // 2. Save to Media Library (Public Storage)
         const currentPermission = await MediaLibrary.getPermissionsAsync();
-        let canSave = currentPermission.granted || (currentPermission as any).accessPrivileges === 'all';
-
-        if (!canSave) {
-            const permission = await MediaLibrary.requestPermissionsAsync();
-            canSave = permission.granted || (permission as any).accessPrivileges === 'all';
-        }
+        const canSave = currentPermission.granted || (currentPermission as any).accessPrivileges === 'all';
 
         if (canSave) {
             try {
+                // Create the asset first
                 const asset = await MediaLibrary.createAssetAsync(destinationUri);
+
+                // Try and add to album. Using copy: true on some devices avoids the 'modify' prompt
+                // because it treats the album entry as a new file rather than a move.
                 const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
                 if (album === null) {
-                    await MediaLibrary.createAlbumAsync('StealthRecorder', asset, false);
+                    await MediaLibrary.createAlbumAsync('StealthRecorder', asset, true);
                 } else {
-                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
                 }
                 console.log('Saved to Media Library album: StealthRecorder');
             } catch (libError) {
-                console.warn('Silent save to media library failed:', libError);
-                // We still have the internal copy, so we don't throw
+                console.warn('Media library save/album task failed:', libError);
+                // Fallback to simpler save if album fails
+                await MediaLibrary.saveToLibraryAsync(destinationUri).catch(e =>
+                    console.error('Final fallback save failed:', e)
+                );
             }
         }
 

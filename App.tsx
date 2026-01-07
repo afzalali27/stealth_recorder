@@ -7,7 +7,6 @@ import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { saveRecording, openFile } from './src/services/StorageService';
-import CameraTestScreen from './src/screens/CameraTestScreen';
 import { Colors } from './src/constants/styles';
 
 export type RootStackParamList = {
@@ -19,7 +18,6 @@ export type RootStackParamList = {
   };
   Recordings: undefined;
   Settings: undefined;
-  CameraTest: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -57,9 +55,6 @@ export default function App() {
                 }}
                 onOpenSettings={() => {
                   props.navigation.navigate('Settings');
-                }}
-                onTestCamera={() => {
-                  props.navigation.navigate('CameraTest');
                 }}
               />
             )}
@@ -102,14 +97,6 @@ export default function App() {
             {(props) => (
               <SettingsScreen
                 {...props}
-                onBack={() => props.navigation.goBack()}
-              />
-            )}
-          </Stack.Screen>
-
-          <Stack.Screen name="CameraTest">
-            {(props) => (
-              <CameraTestScreen
                 onBack={() => props.navigation.goBack()}
               />
             )}
