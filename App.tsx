@@ -96,6 +96,27 @@ export default function App() {
               />
             )}
           </Stack.Screen>
+
+          <Stack.Screen name="Recordings">
+            {(props) => (
+              <RecordingsScreen
+                {...props}
+                onBack={() => props.navigation.goBack()}
+                onPlayVideo={(uri) => {
+                  Alert.alert('Play Video', `Video URI: ${uri}\n\nVideo playback will be available in a future update.`);
+                }}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="Settings">
+            {(props) => (
+              <SettingsScreen
+                {...props}
+                onBack={() => props.navigation.goBack()}
+              />
+            )}
+          </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
     </>
