@@ -24,7 +24,7 @@ export async function requestAllPermissions(): Promise<PermissionStatus> {
         const status: PermissionStatus = {
             camera: cameraResult.status === 'granted',
             microphone: microphoneResult.status === 'granted',
-            mediaLibrary: mediaLibraryResult.status === 'granted',
+            mediaLibrary: mediaLibraryResult.status === 'granted' || (mediaLibraryResult as any).accessPrivileges === 'all',
         };
 
         return status;
@@ -50,7 +50,7 @@ export async function checkAllPermissions(): Promise<PermissionStatus> {
         return {
             camera: cameraResult.status === 'granted',
             microphone: microphoneResult.status === 'granted',
-            mediaLibrary: mediaLibraryResult.status === 'granted',
+            mediaLibrary: mediaLibraryResult.status === 'granted' || (mediaLibraryResult as any).accessPrivileges === 'all',
         };
     } catch (error) {
         console.error('Error checking permissions:', error);

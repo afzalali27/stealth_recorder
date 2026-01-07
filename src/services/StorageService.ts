@@ -48,16 +48,28 @@ export async function saveRecording(sourceUri: string): Promise<VideoFile> {
         });
 
         // 2. Save to Media Library (Public Storage)
-        const permission = await MediaLibrary.requestPermissionsAsync();
-        if (permission.granted) {
-            const asset = await MediaLibrary.createAssetAsync(destinationUri);
-            const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
-            if (album === null) {
-                await MediaLibrary.createAlbumAsync('StealthRecorder', asset, false);
-            } else {
-                await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        const currentPermission = await MediaLibrary.getPermissionsAsync();
+        let canSave = currentPermission.granted || (currentPermission as any).accessPrivileges === 'all';
+
+        if (!canSave) {
+            const permission = await MediaLibrary.requestPermissionsAsync();
+            canSave = permission.granted || (permission as any).accessPrivileges === 'all';
+        }
+
+        if (canSave) {
+            try {
+                const asset = await MediaLibrary.createAssetAsync(destinationUri);
+                const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
+                if (album === null) {
+                    await MediaLibrary.createAlbumAsync('StealthRecorder', asset, false);
+                } else {
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+                }
+                console.log('Saved to Media Library album: StealthRecorder');
+            } catch (libError) {
+                console.warn('Silent save to media library failed:', libError);
+                // We still have the internal copy, so we don't throw
             }
-            console.log('Saved to Media Library album: StealthRecorder');
         }
 
         // Get file info
@@ -115,6 +127,29 @@ export async function openFile(uri: string): Promise<void> {
         }
     } catch (error) {
         console.error('Error opening file:', error);
+        throw error;
+    }
+}
+
+/**
+ * Open recording directory in system files app
+ */
+export async function openDirectory(): Promise<void> {
+    try {
+        if (Platform.OS === 'android') {
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                data: 'content://media/external/video/media',
+                type: 'vnd.android.cursor.dir/video',
+            });
+        } else {
+            // For iOS, sharing is the best we can do
+            const dirInfo = await FileSystem.getInfoAsync(RECORDINGS_DIR);
+            if (dirInfo.exists) {
+                await Sharing.shareAsync(RECORDINGS_DIR);
+            }
+        }
+    } catch (error) {
+        console.error('Error opening directory:', error);
         throw error;
     }
 }

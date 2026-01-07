@@ -17,6 +17,7 @@ import {
     deleteRecording,
     shareRecording,
     openFile,
+    openDirectory,
     formatFileSize,
     formatDuration,
     getStorageStats,
@@ -90,45 +91,51 @@ export default function RecordingsScreen({
 
     const renderRecording = ({ item }: { item: VideoFile }) => (
         <View style={styles.recordingItem}>
-            <View style={styles.recordingIcon}>
-                <Ionicons name="videocam" size={32} color={Colors.primary} />
-            </View>
-
-            <View style={styles.recordingInfo}>
-                <Text style={styles.recordingFilename} numberOfLines={1}>
-                    {item.filename}
-                </Text>
-                <Text style={styles.recordingDate}>{formatDate(item.timestamp)}</Text>
-                <Text style={styles.recordingSize}>{formatFileSize(item.size)}</Text>
+            <View style={styles.recordingMain}>
+                <View style={styles.recordingIcon}>
+                    <Ionicons name="videocam" size={24} color={Colors.primary} />
+                </View>
+                <View style={styles.recordingInfo}>
+                    <Text style={styles.recordingFilename} numberOfLines={1} ellipsizeMode="middle">
+                        {item.filename}
+                    </Text>
+                    <Text style={styles.recordingMeta}>
+                        {formatDate(item.timestamp)} • {formatFileSize(item.size)}
+                    </Text>
+                </View>
             </View>
 
             <View style={styles.recordingActions}>
                 <TouchableOpacity
-                    style={styles.actionIcon}
+                    style={styles.actionButton}
                     onPress={() => onPlayVideo && onPlayVideo(item.uri)}
                 >
-                    <Ionicons name="play-circle-outline" size={28} color={Colors.accent} />
+                    <Ionicons name="play-circle-outline" size={24} color={Colors.accent} />
+                    <Text style={styles.actionLabel}>Play</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.actionIcon}
-                    onPress={() => openFile(item.uri)}
+                    style={styles.actionButton}
+                    onPress={() => openDirectory()}
                 >
-                    <Ionicons name="folder-open-outline" size={28} color={Colors.accent} />
+                    <Ionicons name="folder-open-outline" size={24} color={Colors.textSecondary} />
+                    <Text style={styles.actionLabel}>Gallery</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.actionIcon}
+                    style={styles.actionButton}
                     onPress={() => shareRecording(item.uri)}
                 >
-                    <Ionicons name="share-social-outline" size={28} color={Colors.primary} />
+                    <Ionicons name="share-social-outline" size={24} color={Colors.primary} />
+                    <Text style={styles.actionLabel}>Share</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.actionIcon}
+                    style={styles.actionButton}
                     onPress={() => handleDeleteRecording(item)}
                 >
-                    <Ionicons name="trash-outline" size={28} color={Colors.error} />
+                    <Ionicons name="trash-outline" size={24} color={Colors.error} />
+                    <Text style={styles.actionLabel}>Delete</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -248,16 +255,19 @@ const styles = StyleSheet.create({
         padding: Layout.screenPadding,
     },
     recordingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
         backgroundColor: Colors.surface,
         padding: Spacing.md,
         borderRadius: BorderRadius.lg,
         marginBottom: Spacing.md,
     },
+    recordingMain: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: Spacing.md,
+    },
     recordingIcon: {
-        width: 56,
-        height: 56,
+        width: 44,
+        height: 44,
         borderRadius: BorderRadius.md,
         backgroundColor: 'rgba(76, 175, 80, 0.1)',
         justifyContent: 'center',
@@ -271,23 +281,28 @@ const styles = StyleSheet.create({
         fontSize: Typography.sizes.md,
         fontWeight: Typography.weights.semibold,
         color: Colors.text,
-        marginBottom: Spacing.xs,
-    },
-    recordingDate: {
-        fontSize: Typography.sizes.sm,
-        color: Colors.textSecondary,
         marginBottom: 2,
     },
-    recordingSize: {
-        fontSize: Typography.sizes.xs,
+    recordingMeta: {
+        fontSize: Typography.sizes.sm,
         color: Colors.textSecondary,
     },
     recordingActions: {
         flexDirection: 'row',
-        gap: Spacing.sm,
+        justifyContent: 'space-between',
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        paddingTop: Spacing.sm,
     },
-    actionIcon: {
-        padding: Spacing.sm,
+    actionButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+    },
+    actionLabel: {
+        fontSize: Typography.sizes.xs,
+        color: Colors.textSecondary,
+        marginTop: 4,
     },
     emptyContainer: {
         flex: 1,

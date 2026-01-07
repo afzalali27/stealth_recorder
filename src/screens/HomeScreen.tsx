@@ -16,24 +16,25 @@ interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back' }) => void;
     onViewRecordings: () => void;
     onOpenSettings: () => void;
+    onTestCamera?: () => void;
 }
 
 export default function HomeScreen({
     onStartRecording,
     onViewRecordings,
     onOpenSettings,
+    onTestCamera,
 }: HomeScreenProps) {
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
     const [hasPermissions, setHasPermissions] = useState(false);
 
     useEffect(() => {
-        checkPermissions();
+        const init = async () => {
+            const granted = await ensurePermissions();
+            setHasPermissions(granted);
+        };
+        init();
     }, []);
-
-    const checkPermissions = async () => {
-        const granted = await ensurePermissions();
-        setHasPermissions(granted);
-    };
 
     const handleStartRecording = async () => {
         if (!hasPermissions) {
@@ -145,6 +146,16 @@ export default function HomeScreen({
                         <Text style={styles.actionButtonText}>Settings</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* DEBUG: Camera Test */}
+                <TouchableOpacity
+                    style={[styles.actionButton, { marginTop: Spacing.md, backgroundColor: '#333' }]}
+                    onPress={onTestCamera}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="bug-outline" size={24} color={Colors.error} />
+                    <Text style={[styles.actionButtonText, { color: Colors.error }]}>DEBUG: Test Camera</Text>
+                </TouchableOpacity>
 
                 {/* Info */}
                 <View style={styles.infoContainer}>

@@ -68,7 +68,7 @@ export default function CameraPreview({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: 'transparent',
     },
     camera: {
         flex: 1,
