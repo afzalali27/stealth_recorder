@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, ToastAndroid, Platform } from 'react-native';
+import { View, StyleSheet, Alert, ToastAndroid, Platform, TouchableOpacity } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
 import CameraPreview from '../components/CameraPreview';
 import { RecordingState } from '../types';
+import { Ionicons } from '@expo/vector-icons';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -107,44 +108,42 @@ export default function RecordingScreen({
 
     return (
         <View style={styles.container}>
-            {/* The single persistent CameraView - Always full screen at bottom */}
-            <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-                facing={cameraType}
-                mode="video"
-                enableTorch={flashEnabled}
-                onCameraReady={() => {
-                    console.log('Camera ready');
-                    startRecording();
-                }}
-            />
+            {/* The single persistent CameraView - Switches between Full and PiP */}
+            <View
+                style={currentView === 'fake-call' ? styles.hiddenCamera : styles.pipCamera}
+                pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
+            >
+                <CameraView
+                    ref={cameraRef}
+                    style={styles.camera}
+                    facing={cameraType}
+                    mode="video"
+                    enableTorch={flashEnabled}
+                    onCameraReady={() => {
+                        console.log('Camera ready');
+                        startRecording();
+                    }}
+                />
 
-            {/* Overlays - On top of CameraView */}
-            {currentView === 'fake-call' && (
-                <View style={styles.overlayContainer}>
-                    <FakeCallInterface
-                        callerName={callerName}
-                        callerNumber={callerNumber}
-                        duration={duration}
-                        onEndCall={handleEndCall}
-                        onToggleFlash={handleToggleFlash}
-                        onToggleView={handleToggleView}
-                        flashEnabled={flashEnabled}
-                    />
-                </View>
-            )}
+                {currentView === 'camera-preview' && (
+                    <TouchableOpacity style={styles.pipClose} onPress={handleToggleView}>
+                        <Ionicons name="close-circle" size={32} color="#fff" />
+                    </TouchableOpacity>
+                )}
+            </View>
 
-            {currentView === 'camera-preview' && (
-                <View style={styles.overlayContainer} pointerEvents="box-none">
-                    <CameraPreview
-                        cameraType={cameraType}
-                        flashEnabled={flashEnabled}
-                        onToggleView={handleToggleView}
-                        isRecording={isRecording}
-                    />
-                </View>
-            )}
+            {/* Fake Call Interface - Stays as background even in preview mode */}
+            <View style={[styles.overlayContainer, currentView === 'camera-preview' && { opacity: 0.5 }]}>
+                <FakeCallInterface
+                    callerName={callerName}
+                    callerNumber={callerNumber}
+                    duration={duration}
+                    onEndCall={handleEndCall}
+                    onToggleFlash={handleToggleFlash}
+                    onToggleView={handleToggleView}
+                    flashEnabled={flashEnabled}
+                />
+            </View>
         </View>
     );
 }
@@ -155,11 +154,36 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
     },
     camera: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
+        flex: 1,
+    },
+    hiddenCamera: {
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        opacity: 0,
+        zIndex: -1,
+    },
+    pipCamera: {
+        position: 'absolute',
+        top: 60,
+        right: 20,
+        width: 150,
+        height: 250,
+        zIndex: 10,
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: '#fff',
+        backgroundColor: '#000',
+    },
+    pipClose: {
+        position: 'absolute',
+        top: 5,
+        right: 5,
+        zIndex: 11,
     },
     overlayContainer: {
         ...StyleSheet.absoluteFillObject,
-        zIndex: 2,
+        zIndex: 1,
     },
 });

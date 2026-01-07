@@ -46,11 +46,12 @@ export async function checkAllPermissions(): Promise<PermissionStatus> {
         const cameraResult = await Camera.getCameraPermissionsAsync();
         const microphoneResult = await Camera.getMicrophonePermissionsAsync();
         const mediaLibraryResult = await MediaLibrary.getPermissionsAsync();
+        const isMediaGranted = mediaLibraryResult.status === 'granted' || (mediaLibraryResult as any).accessPrivileges === 'all';
 
         return {
             camera: cameraResult.status === 'granted',
             microphone: microphoneResult.status === 'granted',
-            mediaLibrary: mediaLibraryResult.status === 'granted' || (mediaLibraryResult as any).accessPrivileges === 'all',
+            mediaLibrary: isMediaGranted,
         };
     } catch (error) {
         console.error('Error checking permissions:', error);
