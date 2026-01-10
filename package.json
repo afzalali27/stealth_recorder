@@ -7,6 +7,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@bam.tech/react-native-keyevent-expo-config-plugin": "^1.0.52",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/native": "^7.1.26",
     "@react-navigation/native-stack": "^7.9.0",
@@ -22,6 +23,7 @@
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-keyevent": "^0.3.2",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-screens": "^4.16.0"
   },

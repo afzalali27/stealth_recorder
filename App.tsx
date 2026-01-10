@@ -7,6 +7,7 @@ import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { saveRecording, openFile } from './src/services/StorageService';
+import { loadSettings, AppSettings, DEFAULT_SETTINGS } from './src/services/SettingsManager';
 import { Colors } from './src/constants/styles';
 
 export type RootStackParamList = {
@@ -23,10 +24,17 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
-  const handleStartRecording = (config: { cameraType: 'front' | 'back' }) => {
-    // Navigation will be handled by the navigation prop
-    console.log('Starting recording with config:', config);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+
+  React.useEffect(() => {
+    refreshSettings();
+  }, []);
+
+  const refreshSettings = async () => {
+    const loaded = await loadSettings();
+    setSettings(loaded);
   };
+
 
   return (
     <>
@@ -46,8 +54,8 @@ export default function App() {
                 onStartRecording={(config) => {
                   props.navigation.navigate('Recording', {
                     cameraType: config.cameraType,
-                    callerName: 'Unknown Caller',
-                    callerNumber: '+1 (555) 123-4567',
+                    callerName: settings.callerName,
+                    callerNumber: settings.callerNumber,
                   });
                 }}
                 onViewRecordings={() => {
@@ -97,7 +105,10 @@ export default function App() {
             {(props) => (
               <SettingsScreen
                 {...props}
-                onBack={() => props.navigation.goBack()}
+                onBack={() => {
+                  refreshSettings();
+                  props.navigation.goBack();
+                }}
               />
             )}
           </Stack.Screen>

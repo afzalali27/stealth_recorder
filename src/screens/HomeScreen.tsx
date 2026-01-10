@@ -11,6 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/styles';
 import { ensurePermissions } from '../utils/permissions';
+import { loadSettings, saveSetting, STORAGE_KEYS } from '../services/SettingsManager';
+import { useIsFocused } from '@react-navigation/native';
 
 interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back' }) => void;
@@ -23,8 +25,25 @@ export default function HomeScreen({
     onViewRecordings,
     onOpenSettings,
 }: HomeScreenProps) {
+    const isFocused = useIsFocused();
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
     const [hasPermissions, setHasPermissions] = useState(false);
+
+    useEffect(() => {
+        if (isFocused) {
+            loadDefaultCamera();
+        }
+    }, [isFocused]);
+
+    const loadDefaultCamera = async () => {
+        const settings = await loadSettings();
+        setSelectedCamera(settings.defaultCamera);
+    };
+
+    const handleCameraToggle = async (type: 'front' | 'back') => {
+        setSelectedCamera(type);
+        await saveSetting(STORAGE_KEYS.DEFAULT_CAMERA, type);
+    };
 
     useEffect(() => {
         const init = async () => {
@@ -71,7 +90,7 @@ export default function HomeScreen({
                                 styles.cameraOption,
                                 selectedCamera === 'back' && styles.cameraOptionActive,
                             ]}
-                            onPress={() => setSelectedCamera('back')}
+                            onPress={() => handleCameraToggle('back')}
                             activeOpacity={0.7}
                         >
                             <Ionicons
@@ -94,7 +113,7 @@ export default function HomeScreen({
                                 styles.cameraOption,
                                 selectedCamera === 'front' && styles.cameraOptionActive,
                             ]}
-                            onPress={() => setSelectedCamera('front')}
+                            onPress={() => handleCameraToggle('front')}
                             activeOpacity={0.7}
                         >
                             <Ionicons

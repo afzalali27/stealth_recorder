@@ -30,6 +30,12 @@ export default function FakeCallInterface({
     onToggleView,
     flashEnabled,
 }: FakeCallInterfaceProps) {
+    const [muted, setMuted] = useState(false);
+    const [speakerOn, setSpeakerOn] = useState(false);
+    const [keypadVisible, setKeypadVisible] = useState(false);
+    const [holdActive, setHoldActive] = useState(false);
+    const [onAddCall, setOnAddCall] = useState(false);
+
     const formatDuration = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -65,19 +71,43 @@ export default function FakeCallInterface({
             {/* Middle Section - Secondary Buttons */}
             <View style={styles.middleSection}>
                 <View style={styles.buttonRow}>
-                    <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7}>
-                        <Ionicons name="mic-off-outline" size={28} color={Colors.callText} />
-                        <Text style={styles.buttonLabel}>Mute</Text>
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, muted && styles.activeButton]}
+                        onPress={() => setMuted(!muted)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={muted ? "mic-off" : "mic-off-outline"}
+                            size={28}
+                            color={muted ? Colors.callAccent : Colors.callText}
+                        />
+                        <Text style={[styles.buttonLabel, muted && styles.activeLabel]}>Mute</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7}>
-                        <Ionicons name="keypad-outline" size={28} color={Colors.callText} />
-                        <Text style={styles.buttonLabel}>Keypad</Text>
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, keypadVisible && styles.activeButton]}
+                        onPress={() => setKeypadVisible(!keypadVisible)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={keypadVisible ? "keypad" : "keypad-outline"}
+                            size={28}
+                            color={keypadVisible ? Colors.callAccent : Colors.callText}
+                        />
+                        <Text style={[styles.buttonLabel, keypadVisible && styles.activeLabel]}>Keypad</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7}>
-                        <Ionicons name="volume-high-outline" size={28} color={Colors.callText} />
-                        <Text style={styles.buttonLabel}>Speaker</Text>
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, speakerOn && styles.activeButton]}
+                        onPress={() => setSpeakerOn(!speakerOn)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={speakerOn ? "volume-high" : "volume-high-outline"}
+                            size={28}
+                            color={speakerOn ? Colors.callAccent : Colors.callText}
+                        />
+                        <Text style={[styles.buttonLabel, speakerOn && styles.activeLabel]}>Speaker</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -95,14 +125,30 @@ export default function FakeCallInterface({
                         <Text style={[styles.buttonLabel, flashEnabled && styles.activeLabel]}>Flash</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7}>
-                        <Ionicons name="pause-outline" size={28} color={Colors.callText} />
-                        <Text style={styles.buttonLabel}>Hold</Text>
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, holdActive && styles.activeButton]}
+                        onPress={() => setHoldActive(!holdActive)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={holdActive ? "pause" : "pause-outline"}
+                            size={28}
+                            color={holdActive ? Colors.callAccent : Colors.callText}
+                        />
+                        <Text style={[styles.buttonLabel, holdActive && styles.activeLabel]}>Hold</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.7}>
-                        <Ionicons name="add-outline" size={28} color={Colors.callText} />
-                        <Text style={styles.buttonLabel}>Add Call</Text>
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, onAddCall && styles.activeButton]}
+                        onPress={() => setOnAddCall(!onAddCall)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={onAddCall ? "add" : "add-outline"}
+                            size={28}
+                            color={onAddCall ? Colors.callAccent : Colors.callText}
+                        />
+                        <Text style={[styles.buttonLabel, onAddCall && styles.activeLabel]}>Add Call</Text>
                     </TouchableOpacity>
                 </View>
             </View>

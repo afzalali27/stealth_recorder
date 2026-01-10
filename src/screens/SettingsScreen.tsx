@@ -8,23 +8,20 @@ import {
     TextInput,
     Switch,
     Alert,
+    ToastAndroid,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS, saveSetting, loadSettings as loadFromManager } from '../services/SettingsManager';
 import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/styles';
 
 interface SettingsScreenProps {
     onBack: () => void;
 }
 
-const STORAGE_KEYS = {
-    CALLER_NAME: 'caller_name',
-    CALLER_NUMBER: 'caller_number',
-    DEFAULT_CAMERA: 'default_camera',
-    APP_LOCK_ENABLED: 'app_lock_enabled',
-    APP_PASSWORD: 'app_password',
-};
+
 
 export default function SettingsScreen({ onBack }: SettingsScreenProps) {
     const [callerName, setCallerName] = useState('Unknown Caller');
@@ -40,15 +37,14 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
 
     const loadSettings = async () => {
         try {
-            const savedCallerName = await SecureStore.getItemAsync(STORAGE_KEYS.CALLER_NAME);
-            const savedCallerNumber = await SecureStore.getItemAsync(STORAGE_KEYS.CALLER_NUMBER);
-            const savedDefaultCamera = await SecureStore.getItemAsync(STORAGE_KEYS.DEFAULT_CAMERA);
-            const savedAppLockEnabled = await SecureStore.getItemAsync(STORAGE_KEYS.APP_LOCK_ENABLED);
+            const settings = await loadFromManager();
+            setCallerName(settings.callerName);
+            setCallerNumber(settings.callerNumber);
+            setDefaultCamera(settings.defaultCamera);
+            setAppLockEnabled(settings.appLockEnabled);
 
-            if (savedCallerName) setCallerName(savedCallerName);
-            if (savedCallerNumber) setCallerNumber(savedCallerNumber);
-            if (savedDefaultCamera) setDefaultCamera(savedDefaultCamera as 'front' | 'back');
-            if (savedAppLockEnabled) setAppLockEnabled(savedAppLockEnabled === 'true');
+            const savedPassword = await SecureStore.getItemAsync(STORAGE_KEYS.APP_PASSWORD);
+            if (savedPassword) setPassword(savedPassword);
         } catch (error) {
             console.error('Error loading settings:', error);
         }
@@ -56,10 +52,12 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
 
     const saveSettings = async () => {
         try {
-            await SecureStore.setItemAsync(STORAGE_KEYS.CALLER_NAME, callerName);
-            await SecureStore.setItemAsync(STORAGE_KEYS.CALLER_NUMBER, callerNumber);
-            await SecureStore.setItemAsync(STORAGE_KEYS.DEFAULT_CAMERA, defaultCamera);
-            await SecureStore.setItemAsync(STORAGE_KEYS.APP_LOCK_ENABLED, appLockEnabled.toString());
+            await Promise.all([
+                saveSetting(STORAGE_KEYS.CALLER_NAME, callerName),
+                saveSetting(STORAGE_KEYS.CALLER_NUMBER, callerNumber),
+                saveSetting(STORAGE_KEYS.DEFAULT_CAMERA, defaultCamera),
+                saveSetting(STORAGE_KEYS.APP_LOCK_ENABLED, appLockEnabled.toString()),
+            ]);
 
             if (appLockEnabled && password) {
                 if (password !== confirmPassword) {
@@ -70,13 +68,20 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                     Alert.alert('Error', 'Password must be at least 4 characters');
                     return;
                 }
-                await SecureStore.setItemAsync(STORAGE_KEYS.APP_PASSWORD, password);
+                await saveSetting(STORAGE_KEYS.APP_PASSWORD, password);
             }
 
-            Alert.alert('Success', 'Settings saved successfully');
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Settings saved', ToastAndroid.SHORT);
+            }
+            onBack();
         } catch (error) {
             console.error('Error saving settings:', error);
-            Alert.alert('Error', 'Failed to save settings');
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Failed to save settings', ToastAndroid.LONG);
+            } else {
+                Alert.alert('Error', 'Failed to save settings');
+            }
         }
     };
 

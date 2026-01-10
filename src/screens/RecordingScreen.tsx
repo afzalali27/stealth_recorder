@@ -5,6 +5,9 @@ import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
 import { RecordingState } from '../types';
 import { Ionicons } from '@expo/vector-icons';
+import KeyEvent from 'react-native-keyevent';
+import * as MediaLibrary from 'expo-media-library';
+import { formatDuration } from '../services/StorageService';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -40,10 +43,41 @@ export default function RecordingScreen({
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    // No auto-start here, let onCameraReady handle it
+    // Key event listener for hardware volume buttons
     useEffect(() => {
-        // initialize storage directory
-    }, []);
+        KeyEvent.onKeyDownListener((keyEvent: any) => {
+            if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
+                console.log('Volume button pressed, taking photo...');
+                takePhoto();
+            }
+        });
+
+        return () => {
+            KeyEvent.removeKeyDownListener();
+        };
+    }, [isRecording]); // Re-bind if isRecording changes to ensure we have latest state if needed
+
+    const takePhoto = async () => {
+        if (!cameraRef.current) return;
+
+        try {
+            // Note: takePictureAsync while recordAsync is running is hardware dependent
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.8,
+                skipProcessing: true,
+            });
+
+            if (photo?.uri) {
+                console.log('Photo captured:', photo.uri);
+                await MediaLibrary.saveToLibraryAsync(photo.uri);
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show('Stealth Photo Captured', ToastAndroid.SHORT);
+                }
+            }
+        } catch (error) {
+            console.warn('Photo capture failed (likely concurrent recording limit):', error);
+        }
+    };
 
     const startRecording = async () => {
         if (!cameraRef.current || isRecording) return;
@@ -58,7 +92,7 @@ export default function RecordingScreen({
             if (video?.uri) {
                 console.log('Recording completed:', video.uri);
                 if (Platform.OS === 'android') {
-                    ToastAndroid.show('Recording saved to Gallery', ToastAndroid.SHORT);
+                    ToastAndroid.show(`Call ended (${formatDuration(duration)})`, ToastAndroid.SHORT);
                 }
                 onRecordingComplete(video.uri);
             }

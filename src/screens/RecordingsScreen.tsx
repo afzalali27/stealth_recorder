@@ -7,6 +7,8 @@ import {
     StyleSheet,
     Alert,
     RefreshControl,
+    ToastAndroid,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,9 +76,15 @@ export default function RecordingsScreen({
                         try {
                             await deleteRecording(video.uri);
                             loadRecordings(); // Reload list
-                            Alert.alert('Success', 'Recording deleted');
+                            if (Platform.OS === 'android') {
+                                ToastAndroid.show('Recording deleted', ToastAndroid.SHORT);
+                            }
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to delete recording');
+                            if (Platform.OS === 'android') {
+                                ToastAndroid.show('Failed to delete recording', ToastAndroid.LONG);
+                            } else {
+                                Alert.alert('Error', 'Failed to delete recording');
+                            }
                         }
                     },
                 },
