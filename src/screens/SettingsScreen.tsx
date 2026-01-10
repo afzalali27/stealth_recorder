@@ -28,6 +28,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
     const [callerNumber, setCallerNumber] = useState('+1 (555) 123-4567');
     const [defaultCamera, setDefaultCamera] = useState<'front' | 'back'>('back');
     const [appLockEnabled, setAppLockEnabled] = useState(false);
+    const [notificationsLoggingEnabled, setNotificationsLoggingEnabled] = useState(true);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -42,6 +43,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
             setCallerNumber(settings.callerNumber);
             setDefaultCamera(settings.defaultCamera);
             setAppLockEnabled(settings.appLockEnabled);
+            setNotificationsLoggingEnabled(settings.notificationsLoggingEnabled);
 
             const savedPassword = await SecureStore.getItemAsync(STORAGE_KEYS.APP_PASSWORD);
             if (savedPassword) setPassword(savedPassword);
@@ -57,6 +59,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                 saveSetting(STORAGE_KEYS.CALLER_NUMBER, callerNumber),
                 saveSetting(STORAGE_KEYS.DEFAULT_CAMERA, defaultCamera),
                 saveSetting(STORAGE_KEYS.APP_LOCK_ENABLED, appLockEnabled.toString()),
+                saveSetting(STORAGE_KEYS.NOTIFICATIONS_LOGGING_ENABLED, notificationsLoggingEnabled.toString()),
             ]);
 
             if (Platform.OS === 'android') {
@@ -173,6 +176,23 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                             thumbColor="#FFFFFF"
                         />
                     </View>
+
+                    <View style={styles.separator} />
+
+                    <View style={styles.optionRow}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.optionLabel}>Transmission Logs</Text>
+                            <Text style={styles.optionDescription}>
+                                Capture device notifications in hacking console
+                            </Text>
+                        </View>
+                        <Switch
+                            value={notificationsLoggingEnabled}
+                            onValueChange={setNotificationsLoggingEnabled}
+                            trackColor={{ false: Colors.border, true: Colors.primary }}
+                            thumbColor="#FFFFFF"
+                        />
+                    </View>
                 </View>
 
                 {/* About */}
@@ -263,6 +283,11 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
+    },
+    separator: {
+        height: 1,
+        backgroundColor: Colors.border,
+        marginVertical: Spacing.xs,
     },
     optionLabel: {
         fontSize: Typography.sizes.md,

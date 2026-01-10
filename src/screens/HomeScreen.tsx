@@ -8,6 +8,7 @@ import {
     Platform,
     Alert,
     ScrollView,
+    DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,8 @@ import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/
 import { ensurePermissions } from '../utils/permissions';
 import { loadSettings, saveSetting, STORAGE_KEYS } from '../services/SettingsManager';
 import { useIsFocused } from '@react-navigation/native';
+import RNAndroidNotificationListener from 'react-native-android-notification-listener';
+import { AppState } from 'react-native';
 
 interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back' }) => void;
@@ -32,8 +35,11 @@ export default function HomeScreen({
     const isFocused = useIsFocused();
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
     const [hasPermissions, setHasPermissions] = useState(false);
-    const [cursorVisible, setCursorVisible] = useState(true);
     const [logs, setLogs] = useState<string[]>([]);
+    const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
+    const [notificationsLoggingEnabled, setNotificationsLoggingEnabled] = useState(true);
+    const [cursorVisible, setCursorVisible] = useState(true);
+    const terminalRef = React.useRef<ScrollView>(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -42,42 +48,85 @@ export default function HomeScreen({
         return () => clearInterval(interval);
     }, []);
 
+    const checkNotificationPermission = async () => {
+        if (Platform.OS !== 'android') return;
+        try {
+            const status = await RNAndroidNotificationListener.getPermissionStatus();
+            setIsNotificationEnabled(status === 'authorized');
+        } catch (error) {
+            console.error('[STEALTH_EYE] Permission check failed:', error);
+        }
+    };
+
     useEffect(() => {
-        // Mocking 30 notification logs for "Stealth Eye" aesthetic
-        const mockLogs = [
-            "[SYSTEM] UPLINK_ESTABLISHED: SATELLITE_7",
-            "[NET] INTERCEPTED: ENCRYPTED_SIGNAL_04",
-            "[MSG] INCOMING: GOTHAM_POLICE_RADIO",
-            "[SYS] SCANNING_VULNERABILITIES...",
-            "[DET] MOTION_SENSORS: ACTIVE",
-            "[BIO] BIOMETRIC_SCAN: SECURE",
-            "[LOG] KERNEL_INTEGRITY: OK",
-            "[NET] DDOS_PREVENTION: ARMED",
-            "[SYS] OVERRIDE_PROTOCOL_88: READY",
-            "[MSG] INTERCEPTED: 'Meet at ACE Chemicals'",
-            "[SYS] GPS_SPOOFING: ACTIVE",
-            "[DET] AUDIO_DEBUGGER: FILTERING",
-            "[LOG] DB_SYNC: 100%",
-            "[SYS] THERMAL_IMAGING: STANDBY",
-            "[NET] PACKET_INTERCEPTION: BUSY",
-            "[MSG] INCOMING: 'The Bat is near'",
-            "[SYS] FACIAL_RECOGNITION: MATCH_FOUND",
-            "[LOG] ACCESS_GRANTED: ARKHAM_SERVER",
-            "[DET] VIBRATION_LEVEL: NORMAL",
-            "[SYS] NIGHT_VISION_SENSORS: ON",
-            "[NET] VPN_TUNNEL: ENCRYPTED",
-            "[MSG] INTERCEPTED: 'Initiate black-out'",
-            "[SYS] BATTERY_OPTIMIZATION: OFF",
-            "[LOG] REMOTE_WIPE: DISABLED",
-            "[DET] PROXIMITY_ALERT: 50m",
-            "[SYS] CLOUD_BACKUP: FORCED",
-            "[NET] SIGNAL_STRENGTH: 98%",
-            "[LOG] SYSTEM_UPTIME: 4:20:15",
-            "[MSG] INCOMING: 'Protocol 10 active'",
-            "[SYS] STEALTH_EYE_CORE: STANDBY",
-        ];
-        setLogs(mockLogs);
-    }, []);
+        if (!isFocused) return;
+
+        checkNotificationPermission();
+
+        const notificationSubscription = DeviceEventEmitter.addListener('notificationReceived', (notification) => {
+            if (!notificationsLoggingEnabled) return;
+
+            const app = notification.app?.toUpperCase().split('.').pop() || 'UNK';
+            const logEntry = `[${app}] ${notification.title || 'MSG'}: ${notification.text || '...'}`;
+
+            setLogs(prev => {
+                const updated = [logEntry, ...prev].slice(0, 30);
+                return updated;
+            });
+
+            // Auto-scroll logic happens via ref if needed, but ScrollView has a prop
+        });
+
+        const appStateSubscription = AppState.addEventListener('change', nextAppState => {
+            if (nextAppState === 'active') {
+                checkNotificationPermission();
+            }
+        });
+
+        return () => {
+            notificationSubscription.remove();
+            appStateSubscription.remove();
+        };
+    }, [isFocused, notificationsLoggingEnabled]);
+
+    const dummyLogs = [
+        "[SYSTEM] UPLINK_ESTABLISHED: SATELLITE_7",
+        "[NET] INTERCEPTED: ENCRYPTED_SIGNAL_04",
+        "[MSG] INCOMING: GOTHAM_POLICE_RADIO",
+        "[SYS] SCANNING_VULNERABILITIES...",
+        "[DET] MOTION_SENSORS: ACTIVE",
+        "[BIO] BIOMETRIC_SCAN: SECURE",
+        "[LOG] KERNEL_INTEGRITY: OK",
+        "[NET] DDOS_PREVENTION: ARMED",
+        "[SYS] OVERRIDE_PROTOCOL_88: READY",
+        "[MSG] INTERCEPTED: 'Meet at ACE Chemicals'",
+        "[SYS] GPS_SPOOFING: ACTIVE",
+        "[DET] AUDIO_DEBUGGER: FILTERING",
+        "[LOG] DB_SYNC: 100%",
+        "[SYS] THERMAL_IMAGING: STANDBY",
+        "[NET] PACKET_INTERCEPTION: BUSY",
+        "[MSG] INCOMING: 'The Bat is near'",
+        "[SYS] FACIAL_RECOGNITION: MATCH_FOUND",
+        "[LOG] ACCESS_GRANTED: ARKHAM_SERVER",
+        "[DET] VIBRATION_LEVEL: NORMAL",
+        "[SYS] NIGHT_VISION_SENSORS: ON",
+        "[NET] VPN_TUNNEL: ENCRYPTED",
+        "[MSG] INTERCEPTED: 'Initiate black-out'",
+        "[SYS] BATTERY_OPTIMIZATION: OFF",
+        "[LOG] REMOTE_WIPE: DISABLED",
+        "[DET] PROXIMITY_ALERT: 50m",
+        "[SYS] CLOUD_BACKUP: FORCED",
+        "[NET] SIGNAL_STRENGTH: 98%",
+        "[LOG] SYSTEM_UPTIME: 4:20:15",
+        "[MSG] INCOMING: 'Protocol 10 active'",
+        "[SYS] STEALTH_EYE_CORE: STANDBY",
+    ];
+
+    const handleRequestPermission = () => {
+        if (Platform.OS === 'android') {
+            RNAndroidNotificationListener.requestPermission();
+        }
+    };
 
     useEffect(() => {
         if (isFocused) {
@@ -88,6 +137,7 @@ export default function HomeScreen({
     const loadDefaultCamera = async () => {
         const settings = await loadSettings();
         setSelectedCamera(settings.defaultCamera);
+        setNotificationsLoggingEnabled(settings.notificationsLoggingEnabled);
     };
 
     const handleCameraToggle = async (type: 'front' | 'back') => {
@@ -132,23 +182,25 @@ export default function HomeScreen({
 
             <View style={styles.content}>
                 <View style={styles.terminalContainer}>
-                    <Text style={styles.terminalTitle}>[ TRANSMISSIONS ]</Text>
+                    <View style={styles.terminalHeader}>
+                        <Text style={styles.terminalTitle}>[ TRANSMISSIONS ]</Text>
+                        {!isNotificationEnabled && (
+                            <TouchableOpacity onPress={handleRequestPermission}>
+                                <Text style={styles.terminalAction}>ENABLE_ACCESS</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                     <ScrollView
                         style={styles.terminalContent}
                         contentContainerStyle={styles.terminalScrollContent}
-                        ref={(ref) => ref?.scrollToEnd({ animated: true })}
+                        ref={terminalRef}
+                        onContentSizeChange={() => terminalRef.current?.scrollToEnd({ animated: true })}
                     >
-                        {logs.length > 0 ? (
-                            logs.map((log, index) => (
-                                <Text key={index} style={styles.terminalLine}>
-                                    {'>'} {log}
-                                </Text>
-                            ))
-                        ) : (
-                            <Text style={styles.terminalLine}>
-                                {'>'} SCANNING_ENVIRONMENT...
+                        {(logs.length > 0 ? logs : dummyLogs).map((log, index) => (
+                            <Text key={index} style={styles.terminalLine}>
+                                {'>'} {log}
                             </Text>
-                        )}
+                        ))}
                         <Text style={[styles.terminalLine, { color: Colors.primary, opacity: cursorVisible ? 1 : 0 }]}>
                             {'>'} _
                         </Text>
@@ -261,12 +313,23 @@ const styles = StyleSheet.create({
         height: 180,
         marginBottom: Spacing.xl,
     },
+    terminalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: Spacing.sm,
+    },
     terminalTitle: {
         fontSize: Typography.sizes.xs,
         color: Colors.primary,
         fontWeight: 'bold',
-        marginBottom: Spacing.sm,
         fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    terminalAction: {
+        fontSize: 10,
+        color: Colors.primary,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        textDecorationLine: 'underline',
     },
     terminalContent: {
         flex: 1,
