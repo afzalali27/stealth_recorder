@@ -79,7 +79,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Settings</Text>
+                <Text style={styles.title}>PROTOCOLS</Text>
                 <View style={styles.placeholder} />
             </View>
 
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     cameraToggle: {
         flexDirection: 'row',
         backgroundColor: Colors.surface,
-        borderRadius: BorderRadius.md,
+        borderRadius: BorderRadius.sm,
         padding: 2,
     },
     cameraToggleButton: {
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: Colors.primary,
         paddingVertical: Spacing.lg,
-        borderRadius: BorderRadius.lg,
+        borderRadius: BorderRadius.sm,
         marginTop: Spacing.lg,
     },
     saveButtonText: {

@@ -181,7 +181,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                         />
                     </TouchableOpacity>
                     <Text style={styles.title}>
-                        {isSelectionMode ? `${selectedIds.size} Selected` : `Photos (${photos.length})`}
+                        {isSelectionMode ? `${selectedIds.size} TARGETS` : `INTELLIGENCE (${photos.length})`}
                     </Text>
                 </View>
 
@@ -317,8 +317,10 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: Typography.sizes.xl,
-        fontWeight: Typography.weights.bold,
-        color: Colors.text,
+        fontWeight: '900',
+        color: Colors.primary,
+        letterSpacing: 2,
+        textTransform: 'uppercase',
     },
     headerAction: {
         padding: Spacing.sm,

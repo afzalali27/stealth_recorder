@@ -5,7 +5,9 @@ import {
     TouchableOpacity,
     StyleSheet,
     StatusBar,
+    Platform,
     Alert,
+    ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +32,52 @@ export default function HomeScreen({
     const isFocused = useIsFocused();
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
     const [hasPermissions, setHasPermissions] = useState(false);
+    const [cursorVisible, setCursorVisible] = useState(true);
+    const [logs, setLogs] = useState<string[]>([]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCursorVisible(prev => !prev);
+        }, 500);
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        // Mocking 30 notification logs for "Stealth Eye" aesthetic
+        const mockLogs = [
+            "[SYSTEM] UPLINK_ESTABLISHED: SATELLITE_7",
+            "[NET] INTERCEPTED: ENCRYPTED_SIGNAL_04",
+            "[MSG] INCOMING: GOTHAM_POLICE_RADIO",
+            "[SYS] SCANNING_VULNERABILITIES...",
+            "[DET] MOTION_SENSORS: ACTIVE",
+            "[BIO] BIOMETRIC_SCAN: SECURE",
+            "[LOG] KERNEL_INTEGRITY: OK",
+            "[NET] DDOS_PREVENTION: ARMED",
+            "[SYS] OVERRIDE_PROTOCOL_88: READY",
+            "[MSG] INTERCEPTED: 'Meet at ACE Chemicals'",
+            "[SYS] GPS_SPOOFING: ACTIVE",
+            "[DET] AUDIO_DEBUGGER: FILTERING",
+            "[LOG] DB_SYNC: 100%",
+            "[SYS] THERMAL_IMAGING: STANDBY",
+            "[NET] PACKET_INTERCEPTION: BUSY",
+            "[MSG] INCOMING: 'The Bat is near'",
+            "[SYS] FACIAL_RECOGNITION: MATCH_FOUND",
+            "[LOG] ACCESS_GRANTED: ARKHAM_SERVER",
+            "[DET] VIBRATION_LEVEL: NORMAL",
+            "[SYS] NIGHT_VISION_SENSORS: ON",
+            "[NET] VPN_TUNNEL: ENCRYPTED",
+            "[MSG] INTERCEPTED: 'Initiate black-out'",
+            "[SYS] BATTERY_OPTIMIZATION: OFF",
+            "[LOG] REMOTE_WIPE: DISABLED",
+            "[DET] PROXIMITY_ALERT: 50m",
+            "[SYS] CLOUD_BACKUP: FORCED",
+            "[NET] SIGNAL_STRENGTH: 98%",
+            "[LOG] SYSTEM_UPTIME: 4:20:15",
+            "[MSG] INCOMING: 'Protocol 10 active'",
+            "[SYS] STEALTH_EYE_CORE: STANDBY",
+        ];
+        setLogs(mockLogs);
+    }, []);
 
     useEffect(() => {
         if (isFocused) {
@@ -76,74 +124,36 @@ export default function HomeScreen({
             <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
 
             <View style={styles.header}>
-                <Text style={styles.title}>Stealth Recorder</Text>
+                <Text style={styles.title}>STEALTH EYE</Text>
                 <TouchableOpacity onPress={onOpenSettings} style={styles.settingsButton}>
                     <Ionicons name="settings-outline" size={24} color={Colors.text} />
                 </TouchableOpacity>
             </View>
 
             <View style={styles.content}>
-                {/* Camera Selection */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Select Camera</Text>
-                    <View style={styles.cameraOptions}>
-                        <TouchableOpacity
-                            style={[
-                                styles.cameraOption,
-                                selectedCamera === 'back' && styles.cameraOptionActive,
-                            ]}
-                            onPress={() => handleCameraToggle('back')}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name="camera"
-                                size={40}
-                                color={selectedCamera === 'back' ? Colors.primary : Colors.textSecondary}
-                            />
-                            <Text
-                                style={[
-                                    styles.cameraOptionText,
-                                    selectedCamera === 'back' && styles.cameraOptionTextActive,
-                                ]}
-                            >
-                                Rear Camera
+                <View style={styles.terminalContainer}>
+                    <Text style={styles.terminalTitle}>[ TRANSMISSIONS ]</Text>
+                    <ScrollView
+                        style={styles.terminalContent}
+                        contentContainerStyle={styles.terminalScrollContent}
+                        ref={(ref) => ref?.scrollToEnd({ animated: true })}
+                    >
+                        {logs.length > 0 ? (
+                            logs.map((log, index) => (
+                                <Text key={index} style={styles.terminalLine}>
+                                    {'>'} {log}
+                                </Text>
+                            ))
+                        ) : (
+                            <Text style={styles.terminalLine}>
+                                {'>'} SCANNING_ENVIRONMENT...
                             </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.cameraOption,
-                                selectedCamera === 'front' && styles.cameraOptionActive,
-                            ]}
-                            onPress={() => handleCameraToggle('front')}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name="camera-reverse"
-                                size={40}
-                                color={selectedCamera === 'front' ? Colors.primary : Colors.textSecondary}
-                            />
-                            <Text
-                                style={[
-                                    styles.cameraOptionText,
-                                    selectedCamera === 'front' && styles.cameraOptionTextActive,
-                                ]}
-                            >
-                                Front Camera
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                        )}
+                        <Text style={[styles.terminalLine, { color: Colors.primary, opacity: cursorVisible ? 1 : 0 }]}>
+                            {'>'} _
+                        </Text>
+                    </ScrollView>
                 </View>
-
-                {/* Start Recording Button */}
-                <TouchableOpacity
-                    style={styles.startButton}
-                    onPress={handleStartRecording}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="videocam" size={32} color="#FFFFFF" />
-                    <Text style={styles.startButtonText}>Start Recording</Text>
-                </TouchableOpacity>
 
                 {/* Secondary Actions */}
                 <View style={styles.actionsContainer}>
@@ -152,8 +162,8 @@ export default function HomeScreen({
                         onPress={onViewRecordings}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="videocam-outline" size={28} color={Colors.text} />
-                        <Text style={styles.actionButtonText}>Videos</Text>
+                        <Ionicons name="videocam" size={28} color={Colors.primary} />
+                        <Text style={styles.actionButtonText}>VIDEOS</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -161,8 +171,8 @@ export default function HomeScreen({
                         onPress={onViewPhotos}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="images-outline" size={28} color={Colors.text} />
-                        <Text style={styles.actionButtonText}>Pictures</Text>
+                        <Ionicons name="images" size={28} color={Colors.primary} />
+                        <Text style={styles.actionButtonText}>PHOTOS</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -170,18 +180,40 @@ export default function HomeScreen({
                         onPress={onOpenSettings}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="settings-outline" size={28} color={Colors.text} />
-                        <Text style={styles.actionButtonText}>Settings</Text>
+                        <Ionicons name="settings-sharp" size={28} color={Colors.primary} />
+                        <Text style={styles.actionButtonText}>SETTINGS</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Info */}
-                <View style={styles.infoContainer}>
-                    <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
-                    <Text style={styles.infoText}>
-                        Recording will start with a fake call interface
-                    </Text>
+                <View style={{ flex: 1 }} />
+
+                {/* Rapid Camera Selection */}
+                <View style={styles.rapidCameraContainer}>
+                    <TouchableOpacity
+                        style={[styles.rapidCameraButton, selectedCamera === 'front' && styles.rapidCameraActive]}
+                        onPress={() => handleCameraToggle('front')}
+                    >
+                        <Ionicons name="camera-reverse" size={20} color={selectedCamera === 'front' ? Colors.primary : Colors.textSecondary} />
+                        <Text style={[styles.rapidCameraText, selectedCamera === 'front' && styles.rapidCameraActiveText]}>FRONT</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.rapidCameraButton, selectedCamera === 'back' && styles.rapidCameraActive]}
+                        onPress={() => handleCameraToggle('back')}
+                    >
+                        <Ionicons name="camera" size={20} color={selectedCamera === 'back' ? Colors.primary : Colors.textSecondary} />
+                        <Text style={[styles.rapidCameraText, selectedCamera === 'back' && styles.rapidCameraActiveText]}>REAR</Text>
+                    </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={handleStartRecording}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="flash" size={28} color="#FFFFFF" />
+                    <View style={{ width: Spacing.md }} />
+                    <Text style={styles.startButtonText}>DEPLOY</Text>
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -203,8 +235,12 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: Typography.sizes.xxl,
-        fontWeight: Typography.weights.bold,
-        color: Colors.text,
+        fontWeight: '900',
+        color: Colors.primary,
+        letterSpacing: 2,
+        textShadowColor: 'rgba(155, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
     settingsButton: {
         padding: Spacing.sm,
@@ -214,62 +250,35 @@ const styles = StyleSheet.create({
         paddingHorizontal: Layout.screenPadding,
         paddingTop: Spacing.xl,
     },
-    section: {
+
+
+    terminalContainer: {
+        backgroundColor: Colors.surface,
+        padding: Spacing.md,
+        borderRadius: BorderRadius.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        height: 180,
         marginBottom: Spacing.xl,
     },
-    sectionTitle: {
-        fontSize: Typography.sizes.lg,
-        fontWeight: Typography.weights.semibold,
-        color: Colors.text,
-        marginBottom: Spacing.md,
+    terminalTitle: {
+        fontSize: Typography.sizes.xs,
+        color: Colors.primary,
+        fontWeight: 'bold',
+        marginBottom: Spacing.sm,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
-    cameraOptions: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    cameraOption: {
+    terminalContent: {
         flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderRadius: BorderRadius.lg,
-        borderWidth: 2,
-        borderColor: 'transparent',
     },
-    cameraOptionActive: {
-        borderColor: Colors.primary,
-        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    terminalScrollContent: {
+        paddingBottom: Spacing.sm,
     },
-    cameraOptionText: {
+    terminalLine: {
         fontSize: Typography.sizes.sm,
         color: Colors.textSecondary,
-        marginTop: Spacing.sm,
-        textAlign: 'center',
-    },
-    cameraOptionTextActive: {
-        color: Colors.primary,
-        fontWeight: Typography.weights.semibold,
-    },
-    startButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primary,
-        paddingVertical: Spacing.lg,
-        borderRadius: BorderRadius.lg,
-        marginBottom: Spacing.xl,
-        elevation: 4,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
-    startButtonText: {
-        fontSize: Typography.sizes.lg,
-        fontWeight: Typography.weights.bold,
-        color: '#FFFFFF',
-        marginLeft: Spacing.md,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        marginBottom: 2,
     },
     actionsContainer: {
         flexDirection: 'row',
@@ -280,29 +289,75 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: Spacing.lg,
+        padding: Spacing.md,
         backgroundColor: Colors.surface,
-        borderRadius: BorderRadius.lg,
+        borderRadius: BorderRadius.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
     actionButtonText: {
-        fontSize: Typography.sizes.sm,
+        fontSize: Typography.sizes.xs,
         color: Colors.text,
-        marginTop: Spacing.sm,
-        textAlign: 'center',
+        marginTop: Spacing.xs,
+        fontWeight: 'bold',
+        letterSpacing: 1,
     },
-    infoContainer: {
+    rapidCameraContainer: {
+        flexDirection: 'row',
+        gap: Spacing.md,
+        marginBottom: Spacing.md,
+    },
+    rapidCameraButton: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        padding: Spacing.md,
-        backgroundColor: 'rgba(33, 150, 243, 0.1)',
-        borderRadius: BorderRadius.md,
-        borderLeftWidth: 3,
-        borderLeftColor: Colors.accent,
+        justifyContent: 'center',
+        padding: Spacing.sm,
+        backgroundColor: Colors.surface,
+        borderRadius: BorderRadius.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        gap: Spacing.sm,
+    },
+    rapidCameraActive: {
+        borderColor: Colors.primary,
+        backgroundColor: 'rgba(155, 0, 0, 0.05)',
+    },
+    rapidCameraText: {
+        fontSize: Typography.sizes.xs,
+        color: Colors.textSecondary,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
+    rapidCameraActiveText: {
+        color: Colors.primary,
+    },
+    startButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+        paddingVertical: Spacing.lg,
+        borderRadius: BorderRadius.sm,
+        marginBottom: Spacing.md,
+        borderWidth: 1,
+        borderColor: Colors.accent,
+    },
+    startButtonText: {
+        fontSize: Typography.sizes.xl,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 3,
+    },
+    infoContainer: {
+        padding: Spacing.sm,
+        alignItems: 'center',
+        marginBottom: Spacing.sm,
     },
     infoText: {
-        flex: 1,
-        fontSize: Typography.sizes.sm,
-        color: Colors.textSecondary,
-        marginLeft: Spacing.sm,
+        fontSize: Typography.sizes.xs,
+        color: Colors.primary,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        letterSpacing: 1,
     },
 });

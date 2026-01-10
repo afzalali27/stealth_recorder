@@ -11,15 +11,15 @@ export const Colors = {
     callAccent: '#2196F3',
 
     // App colors
-    background: '#000000',
-    surface: '#1E1E1E',
-    primary: '#4CAF50',
-    secondary: '#757575',
-    accent: '#03A9F4',
-    error: '#F44336',
-    text: '#FFFFFF',
-    textSecondary: '#9E9E9E',
-    border: '#424242',
+    background: '#000000',      // Pure Void
+    surface: '#0D0D0D',         // Bat-Cave Obsidian
+    primary: '#9B0000',         // Blood Red / Aggressive
+    secondary: '#1A1A1A',       // Stealth Grey
+    accent: '#B22222',          // Firebrick
+    error: '#FF0000',
+    text: '#E0E0E0',            // Ash White
+    textSecondary: '#666666',   // Shadow Grey
+    border: '#2A2A2A',          // Dark Iron
 };
 
 export const Typography = {

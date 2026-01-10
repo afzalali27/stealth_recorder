@@ -155,7 +155,7 @@ export default function RecordingsScreen({
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Recordings</Text>
+                <Text style={styles.title}>FILES</Text>
                 <View style={styles.placeholder} />
             </View>
 
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
         marginHorizontal: Layout.screenPadding,
         marginTop: Spacing.md,
         backgroundColor: Colors.surface,
-        borderRadius: BorderRadius.lg,
+        borderRadius: BorderRadius.sm,
     },
     statItem: {
         flex: 1,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     recordingItem: {
         backgroundColor: Colors.surface,
         padding: Spacing.md,
-        borderRadius: BorderRadius.lg,
+        borderRadius: BorderRadius.sm,
         marginBottom: Spacing.md,
     },
     recordingMain: {
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: BorderRadius.md,
-        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        backgroundColor: 'rgba(155, 0, 0, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: Spacing.md,
