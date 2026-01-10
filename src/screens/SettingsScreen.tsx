@@ -80,9 +80,9 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
+                    <Ionicons name="arrow-back" size={24} color={Colors.primary} />
                 </TouchableOpacity>
-                <Text style={styles.title}>PROTOCOLS</Text>
+                <Text style={styles.title}>SETTINGS</Text>
                 <View style={styles.placeholder} />
             </View>
 
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: Typography.sizes.xxl,
         fontWeight: Typography.weights.bold,
-        color: Colors.text,
+        color: Colors.primary,
     },
     placeholder: {
         width: 40,

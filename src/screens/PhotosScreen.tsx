@@ -177,7 +177,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                         <Ionicons
                             name={isSelectionMode ? "close" : "arrow-back"}
                             size={24}
-                            color={Colors.text}
+                            color={Colors.primary}
                         />
                     </TouchableOpacity>
                     <Text style={styles.title}>

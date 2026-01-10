@@ -153,7 +153,7 @@ export default function RecordingsScreen({
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
+                    <Ionicons name="arrow-back" size={24} color={Colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.title}>VIDEOS</Text>
                 <View style={styles.placeholder} />
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: Typography.sizes.xxl,
         fontWeight: Typography.weights.bold,
-        color: Colors.text,
+        color: Colors.primary,
     },
     placeholder: {
         width: 40,
