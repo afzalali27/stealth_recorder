@@ -18,6 +18,7 @@ import { loadSettings, saveSetting, STORAGE_KEYS } from '../services/SettingsMan
 import { useIsFocused } from '@react-navigation/native';
 import RNAndroidNotificationListener from 'react-native-android-notification-listener';
 import { AppState } from 'react-native';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back' }) => void;
@@ -50,6 +51,12 @@ export default function HomeScreen({
 
     const checkNotificationPermission = async () => {
         if (Platform.OS !== 'android') return;
+
+        if (!RNAndroidNotificationListener) {
+            console.log('[STEALTH_EYE] Notification Listener module not found (Expo Go?)');
+            return;
+        }
+
         try {
             const status = await RNAndroidNotificationListener.getPermissionStatus();
             setIsNotificationEnabled(status === 'authorized');
@@ -124,7 +131,18 @@ export default function HomeScreen({
 
     const handleRequestPermission = () => {
         if (Platform.OS === 'android') {
-            RNAndroidNotificationListener.requestPermission();
+            if (RNAndroidNotificationListener) {
+                RNAndroidNotificationListener.requestPermission();
+            } else {
+                // Fallback for Expo Go or unlinked native modules
+                IntentLauncher.startActivityAsync('android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS')
+                    .catch(() => {
+                        Alert.alert(
+                            'TRANSMISSION_LINK_FAILED',
+                            'Manual authorization required. Navigate to Settings > Notifications > Device & App Notifications > Stealth Eye.'
+                        );
+                    });
+            }
         }
     };
 

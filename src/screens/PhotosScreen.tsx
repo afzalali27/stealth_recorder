@@ -181,7 +181,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                         />
                     </TouchableOpacity>
                     <Text style={styles.title}>
-                        {isSelectionMode ? `${selectedIds.size} TARGETS` : `INTELLIGENCE (${photos.length})`}
+                        {isSelectionMode ? `${selectedIds.size} TARGETS` : `PHOTOS (${photos.length})`}
                     </Text>
                 </View>
 

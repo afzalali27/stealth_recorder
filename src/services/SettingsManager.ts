@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     callerNumber: '+1 (555) 123-4567',
     defaultCamera: 'back',
     appLockEnabled: false,
-    notificationsLoggingEnabled: true,
+    notificationsLoggingEnabled: false,
 };
 
 export async function loadSettings(): Promise<AppSettings> {

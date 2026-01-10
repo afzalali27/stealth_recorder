@@ -155,7 +155,7 @@ export default function RecordingsScreen({
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>FILES</Text>
+                <Text style={styles.title}>VIDEOS</Text>
                 <View style={styles.placeholder} />
             </View>
 

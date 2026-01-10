@@ -55,7 +55,8 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to save recordings to your gallery."
         }
       ],
-      "@bam.tech/react-native-keyevent-expo-config-plugin"
+      "@bam.tech/react-native-keyevent-expo-config-plugin",
+      "./plugins/withNotificationListener.js"
     ]
   }
 }
