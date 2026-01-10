@@ -6,16 +6,21 @@ import { Platform } from 'react-native';
 import { VideoFile } from '../types';
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}recordings/`;
+const PHOTOS_DIR = `${FileSystem.documentDirectory}photos/`;
 
 /**
  * Initialize recordings directory
  */
 export async function initializeStorage(): Promise<void> {
     try {
-        const dirInfo = await FileSystem.getInfoAsync(RECORDINGS_DIR);
-        if (!dirInfo.exists) {
+        const recDir = await FileSystem.getInfoAsync(RECORDINGS_DIR);
+        if (!recDir.exists) {
             await FileSystem.makeDirectoryAsync(RECORDINGS_DIR, { intermediates: true });
-            console.log('Recordings directory created:', RECORDINGS_DIR);
+        }
+
+        const photoDir = await FileSystem.getInfoAsync(PHOTOS_DIR);
+        if (!photoDir.exists) {
+            await FileSystem.makeDirectoryAsync(PHOTOS_DIR, { intermediates: true });
         }
     } catch (error) {
         console.error('Error initializing storage:', error);
@@ -194,14 +199,131 @@ export async function listRecordings(): Promise<VideoFile[]> {
 }
 
 /**
- * Delete a recording
+ * Delete a recording (from internal storage and Media Library)
  */
 export async function deleteRecording(uri: string): Promise<void> {
     try {
+        // 1. Try to find and delete from Media Library first
+        const filename = uri.split('/').pop();
+        if (filename) {
+            const assets = await MediaLibrary.getAssetsAsync({
+                album: await MediaLibrary.getAlbumAsync('StealthRecorder'),
+                mediaType: 'video',
+            });
+
+            const assetToDelete = assets.assets.find(a => a.filename === filename);
+            if (assetToDelete) {
+                await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
+                console.log('Deleted from Media Library:', filename);
+            }
+        }
+
+        // 2. Delete from internal storage
         await FileSystem.deleteAsync(uri, { idempotent: true });
-        console.log('Recording deleted:', uri);
+        console.log('Recording deleted internally:', uri);
     } catch (error) {
         console.error('Error deleting recording:', error);
+        throw error;
+    }
+}
+
+/**
+ * Save a photo
+ */
+export async function savePhoto(sourceUri: string): Promise<VideoFile> {
+    try {
+        await initializeStorage();
+        const filename = generateFilename('jpg');
+        const destinationUri = `${PHOTOS_DIR}${filename}`;
+
+        await FileSystem.copyAsync({
+            from: sourceUri,
+            to: destinationUri,
+        });
+
+        const currentPermission = await MediaLibrary.getPermissionsAsync();
+        if (currentPermission.granted || (currentPermission as any).accessPrivileges === 'all') {
+            try {
+                const asset = await MediaLibrary.createAssetAsync(destinationUri);
+                const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
+                if (album === null) {
+                    await MediaLibrary.createAlbumAsync('StealthRecorder', asset, true);
+                } else {
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
+                }
+            } catch (e) {
+                console.warn('Media Library photo save failed:', e);
+            }
+        }
+
+        const fileInfo = await FileSystem.getInfoAsync(destinationUri);
+        return {
+            id: filename,
+            uri: destinationUri,
+            filename,
+            timestamp: Date.now(),
+            duration: 0,
+            size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
+            encrypted: false,
+        };
+    } catch (error) {
+        console.error('Error saving photo:', error);
+        throw error;
+    }
+}
+
+/**
+ * List all photos
+ */
+export async function listPhotos(): Promise<VideoFile[]> {
+    try {
+        await initializeStorage();
+        const files = await FileSystem.readDirectoryAsync(PHOTOS_DIR);
+        const photoFiles: VideoFile[] = [];
+
+        for (const filename of files) {
+            if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
+                const uri = `${PHOTOS_DIR}${filename}`;
+                const fileInfo = await FileSystem.getInfoAsync(uri);
+                if (fileInfo.exists && 'size' in fileInfo && 'modificationTime' in fileInfo) {
+                    photoFiles.push({
+                        id: filename,
+                        uri,
+                        filename,
+                        timestamp: fileInfo.modificationTime * 1000,
+                        duration: 0,
+                        size: fileInfo.size,
+                        encrypted: false,
+                    });
+                }
+            }
+        }
+        return photoFiles.sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+        console.error('Error listing photos:', error);
+        return [];
+    }
+}
+
+/**
+ * Delete a photo
+ */
+export async function deletePhoto(uri: string): Promise<void> {
+    try {
+        const filename = uri.split('/').pop();
+        if (filename) {
+            const assets = await MediaLibrary.getAssetsAsync({
+                album: await MediaLibrary.getAlbumAsync('StealthRecorder'),
+                mediaType: 'photo',
+            });
+            const assetToDelete = assets.assets.find(a => a.filename === filename);
+            if (assetToDelete) {
+                await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
+            }
+        }
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+    } catch (error) {
+        console.error('Error deleting photo:', error);
         throw error;
     }
 }

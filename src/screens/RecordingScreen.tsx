@@ -7,7 +7,7 @@ import { RecordingState } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 import KeyEvent from 'react-native-keyevent';
 import * as MediaLibrary from 'expo-media-library';
-import { formatDuration } from '../services/StorageService';
+import { formatDuration, savePhoto } from '../services/StorageService';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -31,13 +31,19 @@ export default function RecordingScreen({
     const [cameraType, setCameraType] = useState<'front' | 'back'>(initialCameraType);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
+    const durationRef = useRef(0);
 
     // Timer for call duration
     useEffect(() => {
-        if (!isRecording) return;
+        if (!isRecording) {
+            durationRef.current = 0;
+            setDuration(0);
+            return;
+        }
 
         const interval = setInterval(() => {
-            setDuration((prev) => prev + 1);
+            durationRef.current += 1;
+            setDuration(durationRef.current);
         }, 1000);
 
         return () => clearInterval(interval);
@@ -61,7 +67,6 @@ export default function RecordingScreen({
         if (!cameraRef.current) return;
 
         try {
-            // Note: takePictureAsync while recordAsync is running is hardware dependent
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
                 skipProcessing: true,
@@ -69,13 +74,13 @@ export default function RecordingScreen({
 
             if (photo?.uri) {
                 console.log('Photo captured:', photo.uri);
-                await MediaLibrary.saveToLibraryAsync(photo.uri);
+                await savePhoto(photo.uri);
                 if (Platform.OS === 'android') {
                     ToastAndroid.show('Stealth Photo Captured', ToastAndroid.SHORT);
                 }
             }
         } catch (error) {
-            console.warn('Photo capture failed (likely concurrent recording limit):', error);
+            console.warn('Photo capture failed:', error);
         }
     };
 
@@ -92,7 +97,8 @@ export default function RecordingScreen({
             if (video?.uri) {
                 console.log('Recording completed:', video.uri);
                 if (Platform.OS === 'android') {
-                    ToastAndroid.show(`Call ended (${formatDuration(duration)})`, ToastAndroid.SHORT);
+                    // Use ref value to avoid closure issue
+                    ToastAndroid.show(`Call ended (${formatDuration(durationRef.current)})`, ToastAndroid.SHORT);
                 }
                 onRecordingComplete(video.uri);
             }

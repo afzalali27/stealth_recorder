@@ -17,12 +17,14 @@ import { useIsFocused } from '@react-navigation/native';
 interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back' }) => void;
     onViewRecordings: () => void;
+    onViewPhotos: () => void;
     onOpenSettings: () => void;
 }
 
 export default function HomeScreen({
     onStartRecording,
     onViewRecordings,
+    onViewPhotos,
     onOpenSettings,
 }: HomeScreenProps) {
     const isFocused = useIsFocused();
@@ -150,8 +152,17 @@ export default function HomeScreen({
                         onPress={onViewRecordings}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="folder-open-outline" size={28} color={Colors.text} />
-                        <Text style={styles.actionButtonText}>View Recordings</Text>
+                        <Ionicons name="videocam-outline" size={28} color={Colors.text} />
+                        <Text style={styles.actionButtonText}>Videos</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={onViewPhotos}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="images-outline" size={28} color={Colors.text} />
+                        <Text style={styles.actionButtonText}>Pictures</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity

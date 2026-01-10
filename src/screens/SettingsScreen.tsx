@@ -59,18 +59,6 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                 saveSetting(STORAGE_KEYS.APP_LOCK_ENABLED, appLockEnabled.toString()),
             ]);
 
-            if (appLockEnabled && password) {
-                if (password !== confirmPassword) {
-                    Alert.alert('Error', 'Passwords do not match');
-                    return;
-                }
-                if (password.length < 4) {
-                    Alert.alert('Error', 'Password must be at least 4 characters');
-                    return;
-                }
-                await saveSetting(STORAGE_KEYS.APP_PASSWORD, password);
-            }
-
             if (Platform.OS === 'android') {
                 ToastAndroid.show('Settings saved', ToastAndroid.SHORT);
             }
@@ -172,10 +160,10 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                     <Text style={styles.sectionTitle}>Security</Text>
 
                     <View style={styles.optionRow}>
-                        <View>
-                            <Text style={styles.optionLabel}>App Lock</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.optionLabel}>Biometric Lock</Text>
                             <Text style={styles.optionDescription}>
-                                Require password to open app
+                                Use fingerprint or device PIN to open app
                             </Text>
                         </View>
                         <Switch
@@ -185,34 +173,6 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps) {
                             thumbColor="#FFFFFF"
                         />
                     </View>
-
-                    {appLockEnabled && (
-                        <>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Password</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    placeholder="Enter password (min 4 chars)"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    secureTextEntry
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Confirm Password</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                    placeholder="Re-enter password"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    secureTextEntry
-                                />
-                            </View>
-                        </>
-                    )}
                 </View>
 
                 {/* About */}

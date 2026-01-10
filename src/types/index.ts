@@ -23,6 +23,7 @@ export interface RecordingState {
 export interface VideoFile {
     id: string;
     uri: string;
+    assetId?: string; // Media Library Asset ID
     filename: string;
     timestamp: number;
     duration: number;
