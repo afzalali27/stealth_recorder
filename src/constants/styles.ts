@@ -20,6 +20,7 @@ export const Colors = {
     text: '#E0E0E0',            // Ash White
     textSecondary: '#666666',   // Shadow Grey
     border: '#2A2A2A',          // Dark Iron
+    batBlue: '#00A3FF',          // Bat-Computer Electric Blue
 };
 
 export const Typography = {

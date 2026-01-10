@@ -118,7 +118,7 @@ export default function RecordingsScreen({
                     style={styles.actionButton}
                     onPress={() => onPlayVideo && onPlayVideo(item.uri)}
                 >
-                    <Ionicons name="play-circle-outline" size={24} color={Colors.accent} />
+                    <Ionicons name="play-circle-outline" size={24} color={Colors.batBlue} />
                     <Text style={styles.actionLabel}>Play</Text>
                 </TouchableOpacity>
 
@@ -134,7 +134,7 @@ export default function RecordingsScreen({
                     style={styles.actionButton}
                     onPress={() => shareRecording(item.uri)}
                 >
-                    <Ionicons name="share-social-outline" size={24} color={Colors.primary} />
+                    <Ionicons name="share-social-outline" size={24} color={Colors.batBlue} />
                     <Text style={styles.actionLabel}>Share</Text>
                 </TouchableOpacity>
 
