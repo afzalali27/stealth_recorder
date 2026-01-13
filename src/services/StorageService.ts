@@ -203,26 +203,44 @@ export async function listRecordings(): Promise<VideoFile[]> {
  */
 export async function deleteRecording(uri: string): Promise<void> {
     try {
-        // 1. Try to find and delete from Media Library first
         const filename = uri.split('/').pop();
+
         if (filename) {
-            const assets = await MediaLibrary.getAssetsAsync({
-                album: await MediaLibrary.getAlbumAsync('StealthRecorder'),
+            // First try to find in StealthRecorder album
+            const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
+
+            if (album) {
+                const albumAssets = await MediaLibrary.getAssetsAsync({
+                    album: album,
+                    mediaType: 'video',
+                    first: 1000,
+                });
+
+                const assetToDelete = albumAssets.assets.find(a => a.filename === filename);
+                if (assetToDelete) {
+                    await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
+                    console.log('[STEALTH_EYE] Deleted from StealthRecorder album:', filename);
+                }
+            }
+
+            // Also search all video assets as fallback
+            const allAssets = await MediaLibrary.getAssetsAsync({
                 mediaType: 'video',
+                first: 1000,
             });
 
-            const assetToDelete = assets.assets.find(a => a.filename === filename);
-            if (assetToDelete) {
-                await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
-                console.log('Deleted from Media Library:', filename);
+            const matchingAsset = allAssets.assets.find(a => a.filename === filename);
+            if (matchingAsset) {
+                await MediaLibrary.deleteAssetsAsync([matchingAsset.id]);
+                console.log('[STEALTH_EYE] Deleted from Media Library:', filename);
             }
         }
 
-        // 2. Delete from internal storage
+        // Always delete from internal storage
         await FileSystem.deleteAsync(uri, { idempotent: true });
-        console.log('Recording deleted internally:', uri);
+        console.log('[STEALTH_EYE] Recording deleted internally:', uri);
     } catch (error) {
-        console.error('Error deleting recording:', error);
+        console.error('[STEALTH_EYE] Error deleting recording:', error);
         throw error;
     }
 }

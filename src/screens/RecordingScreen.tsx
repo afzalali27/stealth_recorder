@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, Alert, ToastAndroid, Platform, TouchableOpacity } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import KeyEvent from 'react-native-keyevent';
 import * as MediaLibrary from 'expo-media-library';
 import { formatDuration, savePhoto } from '../services/StorageService';
+import { DeviceMotion } from 'expo-sensors';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -31,7 +32,32 @@ export default function RecordingScreen({
     const [cameraType, setCameraType] = useState<'front' | 'back'>(initialCameraType);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
+    const [isNearEar, setIsNearEar] = useState(false);
     const durationRef = useRef(0);
+
+    // Proximity sensor for screen dimming (simulate ear detection)
+    useEffect(() => {
+        let subscription: any;
+
+        const startProximity = async () => {
+            // DeviceMotion doesn't have proximity, but we can detect when phone is tilted to ear
+            // For actual proximity, we'd need a native module. This uses orientation as a proxy.
+            DeviceMotion.setUpdateInterval(500);
+            subscription = DeviceMotion.addListener((data) => {
+                if (data.rotation) {
+                    // Phone is held to ear when tilted ~90 degrees on gamma axis
+                    const isNearEarPosition = Math.abs(data.rotation.gamma) > 1.2 && Math.abs(data.rotation.beta) < 0.5;
+                    setIsNearEar(isNearEarPosition);
+                }
+            });
+        };
+
+        startProximity();
+
+        return () => {
+            if (subscription) subscription.remove();
+        };
+    }, []);
 
     // Timer for call duration
     useEffect(() => {
@@ -49,40 +75,52 @@ export default function RecordingScreen({
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    // Key event listener for hardware volume buttons
-    useEffect(() => {
-        KeyEvent.onKeyDownListener((keyEvent: any) => {
-            if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
-                console.log('Volume button pressed, taking photo...');
-                takePhoto();
-            }
-        });
-
-        return () => {
-            KeyEvent.removeKeyDownListener();
-        };
-    }, [isRecording]); // Re-bind if isRecording changes to ensure we have latest state if needed
-
-    const takePhoto = async () => {
-        if (!cameraRef.current) return;
+    const takePhoto = useCallback(async () => {
+        if (!cameraRef.current) {
+            console.warn('[STEALTH_EYE] Camera ref is null, cannot take photo');
+            return;
+        }
 
         try {
+            console.log('[STEALTH_EYE] Attempting to capture photo...');
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
                 skipProcessing: true,
             });
 
             if (photo?.uri) {
-                console.log('Photo captured:', photo.uri);
+                console.log('[STEALTH_EYE] Photo captured:', photo.uri);
                 await savePhoto(photo.uri);
+                console.log('[STEALTH_EYE] Photo saved successfully');
                 if (Platform.OS === 'android') {
                     ToastAndroid.show('Stealth Photo Captured', ToastAndroid.SHORT);
                 }
+            } else {
+                console.warn('[STEALTH_EYE] Photo capture returned no URI');
             }
         } catch (error) {
-            console.warn('Photo capture failed:', error);
+            console.error('[STEALTH_EYE] Photo capture failed:', error);
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Photo capture failed', ToastAndroid.SHORT);
+            }
         }
-    };
+    }, []);
+
+    // Key event listener for hardware volume buttons
+    useEffect(() => {
+        const handleKeyDown = (keyEvent: any) => {
+            if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
+                console.log('[STEALTH_EYE] Volume button pressed, taking photo...');
+                takePhoto();
+            }
+        };
+
+        KeyEvent.onKeyDownListener(handleKeyDown);
+
+        return () => {
+            KeyEvent.removeKeyDownListener();
+        };
+    }, [takePhoto]);
 
     const startRecording = async () => {
         if (!cameraRef.current || isRecording) return;
@@ -183,6 +221,11 @@ export default function RecordingScreen({
                     flashEnabled={flashEnabled}
                 />
             </View>
+
+            {/* Screen dimming overlay when phone is near ear */}
+            {isNearEar && currentView === 'fake-call' && (
+                <View style={styles.proximityOverlay} />
+            )}
         </View>
     );
 }
@@ -224,5 +267,10 @@ const styles = StyleSheet.create({
     overlayContainer: {
         ...StyleSheet.absoluteFillObject,
         zIndex: 1,
+    },
+    proximityOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#000',
+        zIndex: 100,
     },
 });
