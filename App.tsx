@@ -117,7 +117,7 @@ export default function App() {
                   props.navigation.navigate('Recording', {
                     cameraType: config.cameraType,
                     callerName: settings.callerName,
-                    callerNumber: settings.callerNumber,
+                    callerNumber: config.callerNumber || settings.callerNumber,
                   });
                 }}
                 onViewRecordings={() => {
