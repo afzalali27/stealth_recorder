@@ -247,6 +247,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                 </View>
             ) : viewMode === 'grid' ? (
                 <FlatList
+                    key="grid"
                     data={photos}
                     renderItem={renderPhotoItem}
                     keyExtractor={(item) => item.id}
@@ -263,6 +264,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                 />
             ) : (
                 <FlatList
+                    key="list"
                     data={photos}
                     renderItem={renderListItem}
                     keyExtractor={(item) => item.id}
