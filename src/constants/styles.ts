@@ -41,6 +41,8 @@ export const Typography = {
     },
 };
 
+export const FontSize = Typography.sizes;
+
 export const Spacing = {
     xs: 4,
     sm: 8,

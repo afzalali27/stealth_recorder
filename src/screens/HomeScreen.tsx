@@ -35,6 +35,7 @@ export default function HomeScreen({
     onViewRecordings,
     onViewPhotos,
     onOpenSettings,
+    onOpenLogs,
 }: HomeScreenProps) {
     const isFocused = useIsFocused();
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
@@ -175,9 +176,14 @@ export default function HomeScreen({
 
             <View style={styles.header}>
                 <Text style={styles.title}>STEALTH EYE</Text>
-                <TouchableOpacity onPress={onOpenSettings} style={styles.settingsButton}>
-                    <Ionicons name="settings-outline" size={24} color={Colors.text} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity onPress={onOpenLogs} style={[styles.settingsButton, { marginRight: 15 }]}>
+                        <Ionicons name="document-text-outline" size={24} color={Colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onOpenSettings} style={styles.settingsButton}>
+                        <Ionicons name="settings-outline" size={24} color={Colors.text} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={styles.content}>

@@ -7,6 +7,7 @@ import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
 import PhotosScreen from './src/screens/PhotosScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import LogsScreen from './src/screens/LogsScreen';
 import { saveRecording, openFile } from './src/services/StorageService';
 import { loadSettings, AppSettings, DEFAULT_SETTINGS } from './src/services/SettingsManager';
 import { Colors, Typography, Spacing, BorderRadius } from './src/constants/styles';
@@ -23,6 +24,7 @@ export type RootStackParamList = {
   Recordings: undefined;
   Photos: undefined;
   Settings: undefined;
+  Logs: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -129,6 +131,9 @@ export default function App() {
                 onOpenSettings={() => {
                   props.navigation.navigate('Settings');
                 }}
+                onOpenLogs={() => {
+                  props.navigation.navigate('Logs');
+                }}
               />
             )}
           </Stack.Screen>
@@ -185,6 +190,12 @@ export default function App() {
               />
             )}
           </Stack.Screen>
+
+          <Stack.Screen name="Logs">
+            {(props) => <LogsScreen {...props} onBack={() => props.navigation.goBack()} />}
+          </Stack.Screen>
+
+
         </Stack.Navigator>
       </NavigationContainer>
     </>
