@@ -205,6 +205,9 @@ export async function deleteRecording(uri: string): Promise<void> {
     try {
         const filename = uri.split('/').pop();
 
+        // [MODIFIED] User requested to only delete from app, NOT from device gallery
+        // Media Library deletion logic disabled
+        /*
         if (filename) {
             // First try to find in StealthRecorder album
             const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
@@ -235,6 +238,7 @@ export async function deleteRecording(uri: string): Promise<void> {
                 console.log('[STEALTH_EYE] Deleted from Media Library:', filename);
             }
         }
+        */
 
         // Always delete from internal storage
         await FileSystem.deleteAsync(uri, { idempotent: true });

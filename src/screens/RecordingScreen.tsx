@@ -83,9 +83,12 @@ export default function RecordingScreen({
 
         try {
             console.log('[STEALTH_EYE] Attempting to capture photo...');
+
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
-                skipProcessing: true,
+                // skipProcessing: true, // Removed for reliability on real devices
+                base64: false,
+                exif: false,
             });
 
             if (photo?.uri) {
@@ -97,11 +100,16 @@ export default function RecordingScreen({
                 }
             } else {
                 console.warn('[STEALTH_EYE] Photo capture returned no URI');
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show('Capture Failed: No URI', ToastAndroid.SHORT);
+                }
             }
         } catch (error) {
             console.error('[STEALTH_EYE] Photo capture failed:', error);
             if (Platform.OS === 'android') {
-                ToastAndroid.show('Photo capture failed', ToastAndroid.SHORT);
+                // Convert error to string safely
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                ToastAndroid.show('Photo Capture Failed', ToastAndroid.SHORT);
             }
         }
     }, []);

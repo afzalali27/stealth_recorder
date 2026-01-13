@@ -162,8 +162,7 @@ export default function HomeScreen({
                     onPress={handleDialerCall}
                     disabled={!dialNumber}
                 >
-                    <Ionicons name="call" size={28} color="#fff" />
-                    <Text style={styles.callButtonText}>Call</Text>
+                    <Ionicons name="call" size={32} color="#fff" />
                 </TouchableOpacity>
             </SafeAreaView>
         );
@@ -445,9 +444,9 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.md,
     },
     dialButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: 70,
+        height: 70,
+        borderRadius: 35,
         backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
@@ -455,7 +454,7 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
     },
     dialButtonNum: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: '300',
         color: Colors.text,
     },
@@ -466,22 +465,20 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     callButton: {
-        flexDirection: 'row',
+        width: 70,
+        height: 70,
+        borderRadius: 35,
         backgroundColor: Colors.primary,
-        marginHorizontal: Spacing.xxl,
-        marginBottom: Spacing.xxl,
-        paddingVertical: Spacing.lg,
-        borderRadius: BorderRadius.round,
+        alignSelf: 'center',
         alignItems: 'center',
         justifyContent: 'center',
+        marginTop: Spacing.xl,
+        marginBottom: Spacing.xxl,
     },
     callButtonDisabled: {
         opacity: 0.5,
     },
     callButtonText: {
-        color: '#fff',
-        fontSize: Typography.sizes.lg,
-        fontWeight: Typography.weights.bold,
-        marginLeft: Spacing.sm,
+        display: 'none',
     },
 });
