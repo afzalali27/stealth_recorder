@@ -5,7 +5,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
 import { RecordingState } from '../types';
 import { Ionicons } from '@expo/vector-icons';
-import KeyEvent from 'react-native-keyevent';
+// import KeyEvent from 'react-native-keyevent'; // Removed to prevent iOS crash
 import * as MediaLibrary from 'expo-media-library';
 import { formatDuration, savePhoto } from '../services/StorageService';
 import { DeviceMotion } from 'expo-sensors';
@@ -114,8 +114,18 @@ export default function RecordingScreen({
         }
     }, []);
 
-    // Key event listener for hardware volume buttons
+    // Key event listener for hardware volume buttons (Android only)
     useEffect(() => {
+        if (Platform.OS !== 'android') return;
+
+        let KeyEvent: any;
+        try {
+            KeyEvent = require('react-native-keyevent').default;
+        } catch (e) {
+            console.warn('[STEALTH_EYE] KeyEvent module not found');
+            return;
+        }
+
         const handleKeyDown = (keyEvent: any) => {
             if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
                 console.log('[STEALTH_EYE] Volume button pressed, taking photo...');
