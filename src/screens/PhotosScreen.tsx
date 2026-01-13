@@ -39,6 +39,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
     const [selectedPhoto, setSelectedPhoto] = useState<VideoFile | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     useEffect(() => {
         loadPhotos();
@@ -163,6 +164,38 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
         );
     };
 
+    const renderListItem = ({ item }: { item: VideoFile }) => {
+        const isSelected = selectedIds.has(item.id);
+
+        return (
+            <TouchableOpacity
+                style={[styles.listItem, isSelected && styles.listItemSelected]}
+                onPress={() => handlePhotoPress(item)}
+                onLongPress={() => handleLongPress(item)}
+                activeOpacity={0.8}
+            >
+                <Image
+                    source={{ uri: item.uri }}
+                    style={styles.listThumbnail}
+                    resizeMode="cover"
+                />
+                <View style={styles.listInfo}>
+                    <Text style={styles.listFilename} numberOfLines={1}>{item.filename}</Text>
+                    <Text style={styles.listMeta}>
+                        {formatFileSize(item.size)} • {new Date(item.timestamp).toLocaleDateString()}
+                    </Text>
+                </View>
+                {isSelectionMode && (
+                    <Ionicons
+                        name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={24}
+                        color={isSelected ? Colors.primary : Colors.textSecondary}
+                    />
+                )}
+            </TouchableOpacity>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -190,6 +223,18 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                         <Ionicons name="trash-outline" size={24} color={Colors.error} />
                     </TouchableOpacity>
                 )}
+                {!isSelectionMode && (
+                    <TouchableOpacity
+                        onPress={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                        style={styles.headerAction}
+                    >
+                        <Ionicons
+                            name={viewMode === 'grid' ? 'list' : 'grid'}
+                            size={24}
+                            color={Colors.batBlue}
+                        />
+                    </TouchableOpacity>
+                )}
             </View>
 
             {photos.length === 0 ? (
@@ -200,7 +245,7 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                         Snap photos using volume buttons during recording
                     </Text>
                 </View>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 <FlatList
                     data={photos}
                     renderItem={renderPhotoItem}
@@ -208,6 +253,20 @@ export default function PhotosScreen({ onBack }: PhotosScreenProps) {
                     numColumns={COLUMN_COUNT}
                     contentContainerStyle={styles.listContent}
                     columnWrapperStyle={styles.columnWrapper}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={handleRefresh}
+                            tintColor={Colors.primary}
+                        />
+                    }
+                />
+            ) : (
+                <FlatList
+                    data={photos}
+                    renderItem={renderListItem}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
@@ -352,6 +411,38 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    listItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        backgroundColor: Colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    listItemSelected: {
+        backgroundColor: Colors.secondary,
+    },
+    listThumbnail: {
+        width: 60,
+        height: 60,
+        borderRadius: BorderRadius.sm,
+        backgroundColor: Colors.border,
+    },
+    listInfo: {
+        flex: 1,
+        marginLeft: Spacing.md,
+    },
+    listFilename: {
+        fontSize: Typography.sizes.md,
+        color: Colors.text,
+        fontWeight: Typography.weights.semibold,
+    },
+    listMeta: {
+        fontSize: Typography.sizes.sm,
+        color: Colors.textSecondary,
+        marginTop: 2,
     },
     emptyContainer: {
         flex: 1,

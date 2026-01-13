@@ -101,7 +101,7 @@ export default function RecordingsScreen({
         <View style={styles.recordingItem}>
             <View style={styles.recordingMain}>
                 <View style={styles.recordingIcon}>
-                    <Ionicons name="videocam" size={24} color={Colors.primary} />
+                    <Ionicons name="videocam" size={24} color={Colors.batBlue} />
                 </View>
                 <View style={styles.recordingInfo}>
                     <Text style={styles.recordingFilename} numberOfLines={1} ellipsizeMode="middle">
