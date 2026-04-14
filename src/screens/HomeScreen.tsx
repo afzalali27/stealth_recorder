@@ -9,6 +9,7 @@ import {
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,6 @@ import { loadSettings, saveSetting, STORAGE_KEYS } from '../services/SettingsMan
 interface HomeScreenProps {
     onStartRecording: (config: { cameraType: 'front' | 'back'; callerNumber?: string }) => void;
     onViewRecordings: () => void;
-    onViewPhotos: () => void;
     onOpenSettings: () => void;
     onOpenLogs: () => void;
 }
@@ -35,11 +35,11 @@ const DIAL_PAD = [
 export default function HomeScreen({
     onStartRecording,
     onViewRecordings,
-    onViewPhotos,
     onOpenSettings,
     onOpenLogs,
 }: HomeScreenProps) {
     const isFocused = useIsFocused();
+    const { width } = useWindowDimensions();
     const [selectedCamera, setSelectedCamera] = useState<'front' | 'back'>('back');
     const [hasPermissions, setHasPermissions] = useState(false);
     const [showDialer, setShowDialer] = useState(true);
@@ -114,7 +114,7 @@ export default function HomeScreen({
         setShowDialer(visible);
         Animated.timing(dialerAnim, {
             toValue: visible ? 1 : 0,
-            duration: 220,
+            duration: 180,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
         }).start();
@@ -141,6 +141,29 @@ export default function HomeScreen({
         };
     }, [dialNumber, savedIdentity]);
 
+    const recentRows = useMemo(() => {
+        const rows = [
+            {
+                name: savedIdentity.name,
+                number: savedIdentity.number,
+                region: 'Pakistan',
+            },
+        ];
+
+        if (dialNumber.trim()) {
+            rows.unshift({
+                name: 'Dialing target',
+                number: dialNumber.trim(),
+                region: 'Manual',
+            });
+        }
+
+        return rows.slice(0, 2);
+    }, [dialNumber, savedIdentity]);
+
+    const dialButtonSize = Math.min(74, Math.max(62, Math.floor((width - 148) / 3)));
+    const dialPadWidth = dialButtonSize * 3 + 32;
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -154,7 +177,7 @@ export default function HomeScreen({
                             {
                                 translateY: dialerAnim.interpolate({
                                     inputRange: [0, 1],
-                                    outputRange: [0, 24],
+                                    outputRange: [0, 18],
                                 }),
                             },
                         ],
@@ -191,7 +214,7 @@ export default function HomeScreen({
                         <TouchableOpacity
                             style={styles.actionButton}
                             onPress={onViewRecordings}
-                            activeOpacity={0.75}
+                            activeOpacity={0.8}
                         >
                             <Ionicons name="videocam" size={24} color={Colors.primary} />
                             <Text style={styles.actionButtonText}>VIDEOS</Text>
@@ -199,17 +222,8 @@ export default function HomeScreen({
 
                         <TouchableOpacity
                             style={styles.actionButton}
-                            onPress={onViewPhotos}
-                            activeOpacity={0.75}
-                        >
-                            <Ionicons name="images" size={24} color={Colors.primary} />
-                            <Text style={styles.actionButtonText}>PHOTOS</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionButton}
                             onPress={onOpenSettings}
-                            activeOpacity={0.75}
+                            activeOpacity={0.8}
                         >
                             <Ionicons name="settings-sharp" size={24} color={Colors.primary} />
                             <Text style={styles.actionButtonText}>SETTINGS</Text>
@@ -248,7 +262,7 @@ export default function HomeScreen({
                         onPress={handleStartRecording}
                         activeOpacity={0.84}
                     >
-                        <Ionicons name="flash" size={28} color="#FFFFFF" />
+                        <Ionicons name="flash" size={26} color="#FFFFFF" />
                         <View style={{ width: Spacing.md }} />
                         <Text style={styles.startButtonText}>DEPLOY</Text>
                     </TouchableOpacity>
@@ -264,7 +278,7 @@ export default function HomeScreen({
                             {
                                 translateY: dialerAnim.interpolate({
                                     inputRange: [0, 1],
-                                    outputRange: [56, 0],
+                                    outputRange: [28, 0],
                                 }),
                             },
                         ],
@@ -274,70 +288,70 @@ export default function HomeScreen({
             >
                 <View style={styles.dialerHeader}>
                     <TouchableOpacity onPress={() => setDialerVisibility(false)} style={styles.headerBubbleButton}>
-                        <Ionicons name="home-outline" size={18} color={Colors.textSecondary} />
+                        <Ionicons name="home-outline" size={16} color={Colors.textSecondary} />
                     </TouchableOpacity>
                     <Text style={styles.dialerTitle}>BAT DIAL</Text>
                     <TouchableOpacity onPress={onOpenLogs} style={styles.headerBubbleButton}>
-                        <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
+                        <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.numberDisplay}>
-                    <Text style={styles.numberText} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text style={styles.numberText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
                         {activeIdentity.number}
                     </Text>
                     <Text style={styles.savedContactText}>{activeIdentity.label}</Text>
-                    {dialNumber.length > 0 && (
+                    {dialNumber.length > 0 ? (
                         <TouchableOpacity onPress={handleBackspace} style={styles.backspaceButton}>
-                            <Ionicons name="backspace-outline" size={28} color={Colors.text} />
+                            <Ionicons name="backspace-outline" size={24} color={Colors.textSecondary} />
                         </TouchableOpacity>
-                    )}
+                    ) : null}
                 </View>
 
-                <View style={styles.dialPad}>
+                <View style={styles.recentList}>
+                    {recentRows.map((row) => (
+                        <View key={`${row.name}-${row.number}`} style={styles.recentRow}>
+                            <View>
+                                <Text style={styles.recentName}>{row.name}</Text>
+                                <Text style={styles.recentNumber}>{row.number}</Text>
+                            </View>
+                            <View style={styles.recentRight}>
+                                <Text style={styles.recentRegion}>{row.region}</Text>
+                                <Ionicons name="information-circle-outline" size={18} color={Colors.textSecondary} />
+                            </View>
+                        </View>
+                    ))}
+                </View>
+
+                <View style={[styles.dialPad, { width: dialPadWidth }]}>
                     {DIAL_PAD.map((row, rowIndex) => (
                         <View key={rowIndex} style={styles.dialRow}>
                             {row.map((item) => (
                                 <TouchableOpacity
                                     key={item.num}
-                                    style={styles.dialButton}
+                                    style={[styles.dialButton, { width: dialButtonSize, height: dialButtonSize, borderRadius: dialButtonSize / 2 }]}
                                     onPress={() => handleDialPress(item.num)}
-                                    activeOpacity={0.78}
+                                    activeOpacity={0.8}
                                 >
                                     <Text style={styles.dialButtonNum}>{item.num}</Text>
-                                    {item.sub ? <Text style={styles.dialButtonSub}>{item.sub}</Text> : null}
+                                    {item.sub ? <Text style={styles.dialButtonSub}>{item.sub}</Text> : <Text style={styles.dialButtonSub}> </Text>}
                                 </TouchableOpacity>
                             ))}
                         </View>
                     ))}
                 </View>
 
-                <View style={styles.dialerFooter}>
-                    <View style={styles.cameraQuickSwitch}>
-                        <TouchableOpacity
-                            style={[styles.cameraQuickButton, selectedCamera === 'front' && styles.cameraQuickButtonActive]}
-                            onPress={() => handleCameraToggle('front')}
-                        >
-                            <Ionicons
-                                name="camera-reverse-outline"
-                                size={20}
-                                color={selectedCamera === 'front' ? Colors.primary : Colors.textSecondary}
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.cameraQuickButton, selectedCamera === 'back' && styles.cameraQuickButtonActive]}
-                            onPress={() => handleCameraToggle('back')}
-                        >
-                            <Ionicons
-                                name="camera-outline"
-                                size={20}
-                                color={selectedCamera === 'back' ? Colors.primary : Colors.textSecondary}
-                            />
-                        </TouchableOpacity>
-                    </View>
+                <View style={[styles.dialerFooter, { width: dialPadWidth }]}>
+                    <TouchableOpacity style={styles.footerUtilityButton} onPress={onViewRecordings}>
+                        <Ionicons name="list-outline" size={22} color={Colors.textSecondary} />
+                    </TouchableOpacity>
 
                     <TouchableOpacity style={styles.callButton} onPress={handleDialerCall}>
-                        <Ionicons name="call" size={32} color="#fff" />
+                        <Ionicons name="call" size={30} color="#fff" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.footerUtilityButton} onPress={handleBackspace}>
+                        <Ionicons name="backspace-outline" size={22} color={Colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
             </Animated.View>
@@ -410,7 +424,7 @@ const styles = StyleSheet.create({
         marginHorizontal: Spacing.xs,
         borderWidth: 1,
         borderColor: Colors.border,
-        minHeight: 80,
+        minHeight: 82,
     },
     actionButtonText: {
         marginTop: Spacing.sm,
@@ -472,21 +486,21 @@ const styles = StyleSheet.create({
     dialerOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: Colors.background,
-        paddingHorizontal: 20,
+        paddingHorizontal: 22,
         paddingTop: 8,
-        paddingBottom: 26,
+        paddingBottom: 18,
     },
     dialerHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 10,
-        paddingBottom: 22,
+        paddingTop: 8,
+        paddingBottom: 12,
     },
     headerBubbleButton: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
@@ -495,24 +509,24 @@ const styles = StyleSheet.create({
         fontSize: Typography.sizes.md,
         fontWeight: Typography.weights.semibold,
         color: Colors.textSecondary,
-        letterSpacing: 2.6,
+        letterSpacing: 2.4,
     },
     numberDisplay: {
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 146,
-        marginTop: 8,
-        paddingHorizontal: 20,
+        minHeight: 88,
+        marginTop: 6,
+        paddingHorizontal: 36,
     },
     numberText: {
-        fontSize: 38,
+        fontSize: 26,
         fontWeight: '300',
         color: Colors.text,
         letterSpacing: 2,
         textAlign: 'center',
-        marginBottom: 10,
     },
     savedContactText: {
+        marginTop: 6,
         fontSize: Typography.sizes.sm,
         color: Colors.textSecondary,
         letterSpacing: 1.3,
@@ -520,73 +534,95 @@ const styles = StyleSheet.create({
     },
     backspaceButton: {
         position: 'absolute',
-        right: 6,
-        bottom: 40,
-        padding: 10,
+        right: 4,
+        top: 24,
+        padding: 8,
+    },
+    recentList: {
+        marginTop: 4,
+        marginBottom: 8,
+    },
+    recentRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#1c1c1c',
+    },
+    recentName: {
+        fontSize: Typography.sizes.md,
+        color: Colors.text,
+        fontWeight: Typography.weights.medium,
+    },
+    recentNumber: {
+        marginTop: 3,
+        fontSize: Typography.sizes.sm,
+        color: '#5BB3B0',
+    },
+    recentRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    recentRegion: {
+        color: Colors.textSecondary,
+        fontSize: Typography.sizes.sm,
+        marginRight: 8,
     },
     dialPad: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 6,
+        alignSelf: 'center',
+        marginTop: 12,
     },
     dialRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 18,
+        marginBottom: 14,
     },
     dialButton: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
-        backgroundColor: '#111111',
+        backgroundColor: '#131313',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#1f1f1f',
+        borderColor: '#1d1d1d',
     },
     dialButtonNum: {
-        fontSize: 34,
-        fontWeight: '300',
+        fontSize: 18,
+        fontWeight: '400',
         color: Colors.text,
     },
     dialButtonSub: {
-        fontSize: 10,
+        fontSize: 9,
         color: Colors.textSecondary,
         marginTop: 2,
-        letterSpacing: 1,
+        letterSpacing: 0.7,
+        minHeight: 12,
     },
     dialerFooter: {
-        alignItems: 'center',
-        paddingBottom: 6,
-    },
-    cameraQuickSwitch: {
+        alignSelf: 'center',
         flexDirection: 'row',
-        backgroundColor: Colors.surface,
-        borderRadius: BorderRadius.round,
-        padding: 6,
-        marginBottom: 18,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
     },
-    cameraQuickButton: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
+    footerUtilityButton: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    cameraQuickButtonActive: {
-        backgroundColor: '#171717',
     },
     callButton: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#00C853',
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        backgroundColor: '#1ED760',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#00C853',
+        shadowColor: '#1ED760',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
         elevation: 8,
     },
 });

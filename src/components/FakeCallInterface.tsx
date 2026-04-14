@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
     StyleSheet,
-    Dimensions,
+    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius } from '../constants/styles';
@@ -12,24 +12,20 @@ import { Colors, Typography, Spacing, BorderRadius } from '../constants/styles';
 interface FakeCallInterfaceProps {
     callerName: string;
     callerNumber: string;
-    duration: number; // in seconds
-    zoomLevel: number;
+    duration: number;
     onEndCall: () => void;
     onToggleFlash: () => void;
     onToggleView: () => void;
-    onToggleSpeakerTone: () => void;
+    onToggleSpeakerTone: (enabled: boolean) => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
     flashEnabled: boolean;
 }
 
-const { width, height } = Dimensions.get('window');
-
 export default function FakeCallInterface({
     callerName,
     callerNumber,
     duration,
-    zoomLevel,
     onEndCall,
     onToggleFlash,
     onToggleView,
@@ -38,9 +34,17 @@ export default function FakeCallInterface({
     onZoomOut,
     flashEnabled,
 }: FakeCallInterfaceProps) {
+    const { width } = useWindowDimensions();
     const [muted, setMuted] = useState(false);
     const [speakerOn, setSpeakerOn] = useState(false);
     const [keypadVisible, setKeypadVisible] = useState(false);
+    const [holdActive, setHoldActive] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            onToggleSpeakerTone(false);
+        };
+    }, [onToggleSpeakerTone]);
 
     const formatDuration = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
@@ -48,21 +52,21 @@ export default function FakeCallInterface({
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const buttonWidth = Math.min(92, Math.max(80, (width - 64) / 3));
+
     return (
         <View style={styles.container}>
-            {/* View Toggle Button - Eye Icon */}
             <TouchableOpacity
                 style={styles.viewToggle}
                 onPress={onToggleView}
                 activeOpacity={0.7}
             >
-                <Ionicons name="eye-outline" size={24} color={Colors.callTextSecondary} />
+                <Ionicons name="eye-outline" size={22} color={Colors.callTextSecondary} />
             </TouchableOpacity>
 
-            {/* Top Section - Caller Info */}
             <View style={styles.topSection}>
                 <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={60} color={Colors.callTextSecondary} />
+                    <Ionicons name="person" size={54} color={Colors.callTextSecondary} />
                 </View>
 
                 <Text style={styles.callerName}>{callerName}</Text>
@@ -70,52 +74,50 @@ export default function FakeCallInterface({
 
                 <View style={styles.statusContainer}>
                     <View style={styles.statusDot} />
-                    <Text style={styles.statusText}>
-                        In call • {formatDuration(duration)} • Zoom {Math.max(1, zoomLevel).toFixed(1)}x
-                    </Text>
+                    <Text style={styles.statusText}>In call • {formatDuration(duration)}</Text>
                 </View>
             </View>
 
-            {/* Middle Section - Secondary Buttons */}
             <View style={styles.middleSection}>
                 <View style={styles.buttonRow}>
                     <TouchableOpacity
-                        style={[styles.secondaryButton, muted && styles.activeButton]}
-                        onPress={() => setMuted(!muted)}
-                        activeOpacity={0.7}
+                        style={[styles.secondaryButton, { width: buttonWidth }, muted && styles.activeButton]}
+                        onPress={() => setMuted((prev) => !prev)}
+                        activeOpacity={0.75}
                     >
                         <Ionicons
-                            name={muted ? "mic-off" : "mic-off-outline"}
-                            size={28}
+                            name={muted ? 'mic-off' : 'mic-off-outline'}
+                            size={26}
                             color={muted ? Colors.callAccent : Colors.callText}
                         />
                         <Text style={[styles.buttonLabel, muted && styles.activeLabel]}>Mute</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.secondaryButton, keypadVisible && styles.activeButton]}
-                        onPress={() => setKeypadVisible(!keypadVisible)}
-                        activeOpacity={0.7}
+                        style={[styles.secondaryButton, { width: buttonWidth }, keypadVisible && styles.activeButton]}
+                        onPress={() => setKeypadVisible((prev) => !prev)}
+                        activeOpacity={0.75}
                     >
                         <Ionicons
-                            name={keypadVisible ? "keypad" : "keypad-outline"}
-                            size={28}
+                            name={keypadVisible ? 'keypad' : 'keypad-outline'}
+                            size={26}
                             color={keypadVisible ? Colors.callAccent : Colors.callText}
                         />
                         <Text style={[styles.buttonLabel, keypadVisible && styles.activeLabel]}>Keypad</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.secondaryButton, speakerOn && styles.activeButton]}
+                        style={[styles.secondaryButton, { width: buttonWidth }, speakerOn && styles.activeButton]}
                         onPress={() => {
-                            setSpeakerOn(!speakerOn);
-                            onToggleSpeakerTone();
+                            const next = !speakerOn;
+                            setSpeakerOn(next);
+                            onToggleSpeakerTone(next);
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.75}
                     >
                         <Ionicons
-                            name={speakerOn ? "volume-high" : "volume-high-outline"}
-                            size={28}
+                            name={speakerOn ? 'volume-high' : 'volume-high-outline'}
+                            size={26}
                             color={speakerOn ? Colors.callAccent : Colors.callText}
                         />
                         <Text style={[styles.buttonLabel, speakerOn && styles.activeLabel]}>Speaker</Text>
@@ -124,56 +126,54 @@ export default function FakeCallInterface({
 
                 <View style={styles.buttonRow}>
                     <TouchableOpacity
-                        style={[styles.secondaryButton, flashEnabled && styles.activeButton]}
+                        style={[styles.secondaryButton, { width: buttonWidth }, flashEnabled && styles.activeButton]}
                         onPress={onToggleFlash}
-                        activeOpacity={0.7}
+                        activeOpacity={0.75}
                     >
                         <Ionicons
-                            name={flashEnabled ? "flash" : "flash-outline"}
-                            size={28}
+                            name={flashEnabled ? 'flash' : 'flash-outline'}
+                            size={26}
                             color={flashEnabled ? Colors.callAccent : Colors.callText}
                         />
                         <Text style={[styles.buttonLabel, flashEnabled && styles.activeLabel]}>Flash</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.secondaryButton}
-                        onPress={onZoomOut}
-                        activeOpacity={0.7}
+                        style={[styles.secondaryButton, { width: buttonWidth }, holdActive && styles.activeButton]}
+                        onPress={() => {
+                            setHoldActive((prev) => !prev);
+                            onZoomOut();
+                        }}
+                        activeOpacity={0.75}
                     >
                         <Ionicons
-                            name="remove-circle-outline"
-                            size={28}
-                            color={Colors.callText}
+                            name={holdActive ? 'pause' : 'pause-outline'}
+                            size={26}
+                            color={holdActive ? Colors.callAccent : Colors.callText}
                         />
-                        <Text style={styles.buttonLabel}>Zoom Out</Text>
+                        <Text style={[styles.buttonLabel, holdActive && styles.activeLabel]}>Hold</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.secondaryButton}
+                        style={[styles.secondaryButton, { width: buttonWidth }]}
                         onPress={onZoomIn}
-                        activeOpacity={0.7}
+                        activeOpacity={0.75}
                     >
-                        <Ionicons
-                            name="add-circle-outline"
-                            size={28}
-                            color={Colors.callText}
-                        />
-                        <Text style={styles.buttonLabel}>Zoom In</Text>
+                        <Ionicons name="add-outline" size={26} color={Colors.callText} />
+                        <Text style={styles.buttonLabel}>Add call</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Bottom Section - End Call Button */}
             <View style={styles.bottomSection}>
                 <TouchableOpacity
                     style={styles.endCallButton}
                     onPress={onEndCall}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                 >
-                    <Ionicons name="call" size={32} color="#FFFFFF" />
+                    <Ionicons name="call" size={30} color="#FFFFFF" style={styles.endCallIcon} />
                 </TouchableOpacity>
-                <Text style={styles.endCallText}>End Call</Text>
+                <Text style={styles.endCallText}>End call</Text>
             </View>
         </View>
     );
@@ -183,18 +183,18 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.callBackground,
-        paddingTop: 60,
-        paddingBottom: 40,
+        paddingTop: 58,
+        paddingBottom: 38,
     },
     viewToggle: {
         position: 'absolute',
-        top: 20,
+        top: 18,
         right: 20,
         zIndex: 10,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -202,12 +202,12 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 40,
+        paddingTop: 32,
     },
     avatarPlaceholder: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        width: 110,
+        height: 110,
+        borderRadius: 55,
         backgroundColor: Colors.callSecondary,
         justifyContent: 'center',
         alignItems: 'center',
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.sm,
-        backgroundColor: 'rgba(0, 200, 83, 0.2)',
+        backgroundColor: 'rgba(0, 200, 83, 0.16)',
         borderRadius: BorderRadius.lg,
     },
     statusDot: {
@@ -245,40 +245,40 @@ const styles = StyleSheet.create({
         fontWeight: Typography.weights.medium,
     },
     middleSection: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.xl,
+        paddingHorizontal: 18,
+        paddingVertical: 24,
     },
     buttonRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        marginBottom: Spacing.xl,
+        justifyContent: 'space-between',
+        marginBottom: 24,
     },
     secondaryButton: {
         alignItems: 'center',
         justifyContent: 'center',
-        padding: Spacing.md,
-        width: 80,
+        paddingVertical: 12,
+        borderRadius: BorderRadius.md,
     },
     activeButton: {
-        backgroundColor: 'rgba(33, 150, 243, 0.2)',
-        borderRadius: BorderRadius.md,
+        backgroundColor: 'rgba(33, 150, 243, 0.16)',
     },
     buttonLabel: {
         fontSize: Typography.sizes.xs,
         color: Colors.callTextSecondary,
-        marginTop: Spacing.xs,
+        marginTop: 6,
+        textTransform: 'capitalize',
     },
     activeLabel: {
         color: Colors.callAccent,
     },
     bottomSection: {
         alignItems: 'center',
-        paddingBottom: Spacing.xl,
+        paddingBottom: 10,
     },
     endCallButton: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
+        width: 72,
+        height: 72,
+        borderRadius: 36,
         backgroundColor: Colors.callDanger,
         justifyContent: 'center',
         alignItems: 'center',
@@ -288,9 +288,13 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 6,
     },
+    endCallIcon: {
+        transform: [{ rotate: '135deg' }],
+    },
     endCallText: {
-        fontSize: Typography.sizes.md,
+        fontSize: Typography.sizes.sm,
         color: Colors.callTextSecondary,
         marginTop: Spacing.md,
+        textTransform: 'capitalize',
     },
 });

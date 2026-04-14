@@ -17,36 +17,19 @@ import expo.modules.ReactActivityDelegateWrapper
 class MainActivity : ReactActivity() {
 // @generated begin react-native-keyevent-body - expo prebuild (DO NOT MODIFY) sync-4e643b1f863a7b24063f5e26e0cc2645f10e8742
 override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-   // // Uncomment this if key events should only trigger once when key is held down
-  // if (event.getRepeatCount() == 0) {
-  //   KeyEventModule.getInstance().onKeyDownEvent(keyCode, event)
-  // }
-
-  // // This will trigger the key repeat if the key is held down
-  // // Comment this out if uncommenting the above
   KeyEventModule.getInstance().onKeyDownEvent(keyCode, event)
-
-  // // Uncomment this if you want the default keyboard behavior
-  // return super.onKeyDown(keyCode, event)
-
-  // // The default keyboard behaviour wll be overridden
-  // // This is similar to what e.preventDefault() does in a browser
-  // // comment this if uncommenting the above
-  super.onKeyDown(keyCode, event)
-  return true
+  if (keyCode == KeyEvent.KEYCODE_POWER) {
+    return true
+  }
+  return super.onKeyDown(keyCode, event)
 }
 
 override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
   KeyEventModule.getInstance().onKeyUpEvent(keyCode, event)
-
-  // // Uncomment this if you want the default keyboard behavior
-  // return super.onKeyUp(keyCode, event)
-
-  // // The default keyboard behaviour wll be overridden
-  // // This is similar to what e.preventDefault() does in a browser
-  // // comment this if uncommenting the above
-  super.onKeyUp(keyCode, event)
-  return true
+  if (keyCode == KeyEvent.KEYCODE_POWER) {
+    return true
+  }
+  return super.onKeyUp(keyCode, event)
 }
 
 override fun onKeyMultiple(keyCode: Int, repeatCount: Int, event: KeyEvent): Boolean {

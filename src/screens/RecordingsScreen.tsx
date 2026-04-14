@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    FlatList,
-    TouchableOpacity,
-    StyleSheet,
     Alert,
-    RefreshControl,
-    ToastAndroid,
+    FlatList,
+    Image,
     Platform,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    ToastAndroid,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/styles';
 import { VideoFile } from '../types';
 import {
@@ -20,7 +21,6 @@ import {
     deleteRecording,
     shareRecording,
     openFile,
-    openDirectory,
     formatFileSize,
     formatDuration,
     getStorageStats,
@@ -36,9 +36,9 @@ export default function RecordingsScreen({
     onPlayVideo,
 }: RecordingsScreenProps) {
     const [recordings, setRecordings] = useState<VideoFile[]>([]);
-    const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [storageStats, setStorageStats] = useState({ totalSize: 0, fileCount: 0 });
+    const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
 
     useEffect(() => {
         loadRecordings();
@@ -50,24 +50,41 @@ export default function RecordingsScreen({
             const stats = await getStorageStats();
             setRecordings(files);
             setStorageStats(stats);
+
+            const thumbnailPairs = await Promise.all(
+                files.map(async (file) => {
+                    try {
+                        const result = await VideoThumbnails.getThumbnailAsync(file.uri, {
+                            time: 1000,
+                            quality: 0.35,
+                        });
+                        return [file.id, result.uri] as const;
+                    } catch (error) {
+                        return [file.id, ''] as const;
+                    }
+                })
+            );
+
+            setThumbnails(
+                thumbnailPairs.reduce<Record<string, string>>((acc, [id, uri]) => {
+                    if (uri) {
+                        acc[id] = uri;
+                    }
+                    return acc;
+                }, {})
+            );
         } catch (error) {
             console.error('Error loading recordings:', error);
             Alert.alert('Error', 'Failed to load recordings');
         } finally {
-            setLoading(false);
             setRefreshing(false);
         }
-    };
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        loadRecordings();
     };
 
     const handleDeleteRecording = (video: VideoFile) => {
         Alert.alert(
             'Delete Recording',
-            `Are you sure you want to delete ${video.filename}?`,
+            `Delete ${video.filename}?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -76,7 +93,7 @@ export default function RecordingsScreen({
                     onPress: async () => {
                         try {
                             await deleteRecording(video);
-                            loadRecordings(); // Reload list
+                            await loadRecordings();
                             if (Platform.OS === 'android') {
                                 ToastAndroid.show('Recording deleted', ToastAndroid.SHORT);
                             }
@@ -93,56 +110,54 @@ export default function RecordingsScreen({
         );
     };
 
-    const formatDate = (timestamp: number): string => {
-        const date = new Date(timestamp);
-        return date.toLocaleString();
-    };
+    const formatDate = (timestamp: number): string => new Date(timestamp).toLocaleString();
 
     const renderRecording = ({ item }: { item: VideoFile }) => (
         <View style={styles.recordingItem}>
-            <View style={styles.recordingMain}>
+            <TouchableOpacity
+                style={styles.recordingMain}
+                activeOpacity={0.8}
+                onPress={() => (onPlayVideo ? onPlayVideo(item.uri) : openFile(item.uri))}
+            >
                 <View style={styles.thumbnailWrap}>
-                    <Video
-                        source={{ uri: item.thumbnail || item.uri }}
-                        style={styles.thumbnail}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay={false}
-                        isLooping={false}
-                        isMuted
-                        useNativeControls={false}
-                    />
-                    <View style={styles.thumbnailOverlay}>
-                        <Ionicons name="play" size={18} color="#fff" />
+                    {thumbnails[item.id] ? (
+                        <Image
+                            source={{ uri: thumbnails[item.id] }}
+                            style={styles.thumbnailImage}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <Ionicons name="videocam" size={26} color={Colors.batBlue} />
+                    )}
+                    <View style={styles.thumbnailShade} />
+                    <View style={styles.playBadge}>
+                        <Ionicons name="play" size={14} color="#fff" />
+                    </View>
+                    <View style={styles.durationBadge}>
+                        <Text style={styles.durationBadgeText}>{formatDuration(item.duration)}</Text>
                     </View>
                 </View>
+
                 <View style={styles.recordingInfo}>
                     <Text style={styles.recordingFilename} numberOfLines={1} ellipsizeMode="middle">
                         {item.filename}
                     </Text>
                     <Text style={styles.recordingMeta}>
-                        {formatDate(item.timestamp)} • {formatFileSize(item.size)}
+                        {formatDate(item.timestamp)}
                     </Text>
                     <Text style={styles.recordingMeta}>
-                        Length: {formatDuration(item.duration)}
+                        {formatFileSize(item.size)}
                     </Text>
                 </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.recordingActions}>
                 <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => onPlayVideo && onPlayVideo(item.uri)}
+                    onPress={() => (onPlayVideo ? onPlayVideo(item.uri) : openFile(item.uri))}
                 >
                     <Ionicons name="play-circle-outline" size={24} color={Colors.batBlue} />
                     <Text style={styles.actionLabel}>Play</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => openDirectory()}
-                >
-                    <Ionicons name="folder-open-outline" size={24} color={Colors.textSecondary} />
-                    <Text style={styles.actionLabel}>Gallery</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -174,7 +189,6 @@ export default function RecordingsScreen({
                 <View style={styles.placeholder} />
             </View>
 
-            {/* Storage Stats */}
             <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
                     <Ionicons name="folder-outline" size={24} color={Colors.accent} />
@@ -191,14 +205,11 @@ export default function RecordingsScreen({
                 </View>
             </View>
 
-            {/* Recordings List */}
             {recordings.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <Ionicons name="videocam-off-outline" size={80} color={Colors.textSecondary} />
                     <Text style={styles.emptyText}>No recordings yet</Text>
-                    <Text style={styles.emptySubtext}>
-                        Start recording to see your videos here
-                    </Text>
+                    <Text style={styles.emptySubtext}>Start recording to see your videos here</Text>
                 </View>
             ) : (
                 <FlatList
@@ -209,7 +220,10 @@ export default function RecordingsScreen({
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
-                            onRefresh={handleRefresh}
+                            onRefresh={() => {
+                                setRefreshing(true);
+                                loadRecordings();
+                            }}
                             tintColor={Colors.primary}
                         />
                     }
@@ -276,6 +290,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: Layout.screenPadding,
+        paddingBottom: 40,
     },
     recordingItem: {
         backgroundColor: Colors.surface,
@@ -292,19 +307,44 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: BorderRadius.md,
-        overflow: 'hidden',
-        marginRight: Spacing.md,
         backgroundColor: '#111',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: Spacing.md,
+        overflow: 'hidden',
     },
-    thumbnail: {
+    thumbnailImage: {
+        ...StyleSheet.absoluteFillObject,
         width: '100%',
         height: '100%',
     },
-    thumbnailOverlay: {
+    thumbnailShade: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.25)',
-        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    },
+    playBadge: {
+        position: 'absolute',
+        left: 6,
+        bottom: 6,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
         alignItems: 'center',
+        justifyContent: 'center',
+    },
+    durationBadge: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        borderRadius: 10,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+    },
+    durationBadgeText: {
+        color: '#fff',
+        fontSize: 10,
     },
     recordingInfo: {
         flex: 1,
@@ -313,11 +353,12 @@ const styles = StyleSheet.create({
         fontSize: Typography.sizes.md,
         fontWeight: Typography.weights.semibold,
         color: Colors.text,
-        marginBottom: 2,
+        marginBottom: 4,
     },
     recordingMeta: {
         fontSize: Typography.sizes.sm,
         color: Colors.textSecondary,
+        marginTop: 2,
     },
     recordingActions: {
         flexDirection: 'row',
@@ -343,15 +384,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.xl,
     },
     emptyText: {
+        marginTop: Spacing.lg,
+        color: Colors.text,
         fontSize: Typography.sizes.lg,
         fontWeight: Typography.weights.semibold,
-        color: Colors.textSecondary,
-        marginTop: Spacing.lg,
     },
     emptySubtext: {
-        fontSize: Typography.sizes.md,
-        color: Colors.textSecondary,
         marginTop: Spacing.sm,
+        color: Colors.textSecondary,
+        fontSize: Typography.sizes.sm,
         textAlign: 'center',
     },
 });

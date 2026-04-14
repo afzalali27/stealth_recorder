@@ -3,6 +3,7 @@ import { Audio } from 'expo-av';
 
 const BEEP_FILE_PATH = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ''}call-beep.wav`;
 let sound: Audio.Sound | null = null;
+let looping = false;
 
 function encodeBase64(bytes: Uint8Array): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -25,17 +26,19 @@ function encodeBase64(bytes: Uint8Array): string {
 
 function buildBeepWavBase64(): string {
     const sampleRate = 8000;
-    const durationMs = 180;
-    const frequency = 880;
+    const durationMs = 320;
+    const frequency = 620;
     const sampleCount = Math.floor((sampleRate * durationMs) / 1000);
     const pcmBytes = new Uint8Array(sampleCount);
 
     for (let i = 0; i < sampleCount; i += 1) {
-        const envelope = Math.min(1, i / 150, (sampleCount - i) / 150);
+        const fadeIn = Math.min(1, i / 180);
+        const fadeOut = Math.min(1, (sampleCount - i) / 180);
+        const envelope = Math.max(0.25, Math.min(fadeIn, fadeOut));
         const sample =
             128 +
             Math.round(
-                Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 55 * Math.max(envelope, 0.15)
+                Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 42 * envelope
             );
         pcmBytes[i] = Math.max(0, Math.min(255, sample));
     }
@@ -82,32 +85,53 @@ async function ensureBeepFile(): Promise<string> {
     return BEEP_FILE_PATH;
 }
 
-export async function playCallBeep(): Promise<void> {
-    try {
-        await Audio.setAudioModeAsync({
-            playsInSilentModeIOS: true,
-            shouldDuckAndroid: true,
-            staysActiveInBackground: false,
-        });
+async function ensureSound(): Promise<Audio.Sound> {
+    await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        staysActiveInBackground: false,
+    });
 
+    if (!sound) {
         const uri = await ensureBeepFile();
-        if (!sound) {
-            const created = await Audio.Sound.createAsync(
-                { uri },
-                { shouldPlay: false, isLooping: false, volume: 0.75 }
-            );
-            sound = created.sound;
-        }
+        const created = await Audio.Sound.createAsync(
+            { uri },
+            { shouldPlay: false, isLooping: true, volume: 0.55 }
+        );
+        sound = created.sound;
+    }
 
-        await sound.stopAsync().catch(() => undefined);
-        await sound.setPositionAsync(0);
-        await sound.playAsync();
+    return sound;
+}
+
+export async function setCallBeepLoop(enabled: boolean): Promise<void> {
+    try {
+        const current = await ensureSound();
+        looping = enabled;
+
+        if (enabled) {
+            await current.setIsLoopingAsync(true);
+            await current.setPositionAsync(0);
+            await current.playAsync();
+        } else {
+            await current.stopAsync().catch(() => undefined);
+            await current.setPositionAsync(0).catch(() => undefined);
+        }
     } catch (error) {
-        console.warn('Failed to play call beep:', error);
+        console.warn('Failed to update call beep loop:', error);
+    }
+}
+
+export async function stopCallBeep(): Promise<void> {
+    looping = false;
+    if (sound) {
+        await sound.stopAsync().catch(() => undefined);
+        await sound.setPositionAsync(0).catch(() => undefined);
     }
 }
 
 export async function unloadCallBeep(): Promise<void> {
+    looping = false;
     if (sound) {
         await sound.unloadAsync().catch(() => undefined);
         sound = null;

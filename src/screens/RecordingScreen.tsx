@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, ToastAndroid, Platform, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Platform, StyleSheet, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
+import { DeviceMotion } from 'expo-sensors';
+import { Ionicons } from '@expo/vector-icons';
 import FakeCallInterface from '../components/FakeCallInterface';
 import { CallRecordingResult } from '../types';
-import { Ionicons } from '@expo/vector-icons';
 import { formatDuration } from '../services/StorageService';
-import { DeviceMotion } from 'expo-sensors';
-import { playCallBeep, unloadCallBeep } from '../services/CallAudioService';
+import { setCallBeepLoop, stopCallBeep, unloadCallBeep } from '../services/CallAudioService';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -22,52 +22,58 @@ export default function RecordingScreen({
     cameraType: initialCameraType = 'back',
     onRecordingComplete,
 }: RecordingScreenProps) {
-    // Keep screen awake during recording
     useKeepAwake();
 
     const cameraRef = useRef<CameraView>(null);
+    const startedRef = useRef(false);
+    const endingRef = useRef(false);
+    const completedRef = useRef(false);
+    const durationRef = useRef(0);
     const [currentView, setCurrentView] = useState<'fake-call' | 'camera-preview'>('fake-call');
     const [flashEnabled, setFlashEnabled] = useState(false);
-    const [cameraType, setCameraType] = useState<'front' | 'back'>(initialCameraType);
-    const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
-    const [isNearEar, setIsNearEar] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(0);
-    const durationRef = useRef(0);
-    const callStartedAtRef = useRef(Date.now());
-    const hasStartedRecordingRef = useRef(false);
+    const [isNearEar, setIsNearEar] = useState(false);
+    const [screenBlackout, setScreenBlackout] = useState(false);
 
-    // Proximity sensor for screen dimming (simulate ear detection)
     useEffect(() => {
-        let subscription: any;
+        let subscription: { remove: () => void } | undefined;
 
-        const startProximity = async () => {
-            // DeviceMotion doesn't have proximity, but we can detect when phone is tilted to ear
-            // For actual proximity, we'd need a native module. This uses orientation as a proxy.
-            DeviceMotion.setUpdateInterval(500);
+        const startMotionTracking = async () => {
+            DeviceMotion.setUpdateInterval(250);
             subscription = DeviceMotion.addListener((data) => {
-                if (data.rotation) {
-                    // Phone is held to ear when tilted ~90 degrees on gamma axis
-                    const isNearEarPosition = Math.abs(data.rotation.gamma) > 1.2 && Math.abs(data.rotation.beta) < 0.5;
-                    setIsNearEar(isNearEarPosition);
-                }
+                const rotation = data.rotation;
+                const gravity = data.accelerationIncludingGravity;
+
+                const sideTilt =
+                    !!rotation &&
+                    Math.abs(rotation.gamma ?? 0) > 0.7 &&
+                    Math.abs(rotation.beta ?? 0) < 1.5;
+
+                const uprightGrip =
+                    !!gravity &&
+                    Math.abs(gravity.y ?? 0) > 7 &&
+                    Math.abs(gravity.z ?? 0) < 6;
+
+                setIsNearEar(sideTilt || uprightGrip);
             });
         };
 
-        startProximity();
+        startMotionTracking();
 
         return () => {
-            if (subscription) subscription.remove();
+            subscription?.remove();
         };
     }, []);
 
     useEffect(() => {
         return () => {
+            stopCallBeep();
             unloadCallBeep();
         };
     }, []);
 
-    // Timer for call duration
     useEffect(() => {
         if (!isRecording) {
             durationRef.current = 0;
@@ -83,21 +89,22 @@ export default function RecordingScreen({
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    // Key event listener for hardware volume buttons (Android only)
     useEffect(() => {
-        if (Platform.OS !== 'android') return;
+        if (Platform.OS !== 'android') {
+            return;
+        }
 
         let KeyEvent: any;
         try {
             KeyEvent = require('react-native-keyevent').default;
-        } catch (e) {
-            console.warn('[STEALTH_EYE] KeyEvent module not found');
+        } catch (error) {
+            console.warn('[BAT_EYE] KeyEvent module not found');
             return;
         }
 
-        const handleKeyDown = (keyEvent: any) => {
-            if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
-                playCallBeep();
+        const handleKeyDown = (keyEvent: { keyCode: number }) => {
+            if (keyEvent.keyCode === 26) {
+                setScreenBlackout((prev) => !prev);
             }
         };
 
@@ -109,22 +116,25 @@ export default function RecordingScreen({
     }, []);
 
     const startRecording = async () => {
-        if (!cameraRef.current || hasStartedRecordingRef.current) return;
+        if (!cameraRef.current || startedRef.current || endingRef.current || completedRef.current) {
+            return;
+        }
 
         try {
-            console.log('Starting recording...');
-            hasStartedRecordingRef.current = true;
-            callStartedAtRef.current = Date.now();
+            startedRef.current = true;
             setIsRecording(true);
+
             const video = await cameraRef.current.recordAsync({
-                maxDuration: 3600, // 1 hour max
+                maxDuration: 3600,
             });
 
-            if (video?.uri) {
-                console.log('Recording completed:', video.uri);
+            if (video?.uri && !completedRef.current) {
+                completedRef.current = true;
                 if (Platform.OS === 'android') {
                     ToastAndroid.show(`Call ended (${formatDuration(durationRef.current)})`, ToastAndroid.SHORT);
                 }
+
+                await stopCallBeep();
                 onRecordingComplete({
                     videoUri: video.uri,
                     duration: durationRef.current,
@@ -134,65 +144,50 @@ export default function RecordingScreen({
                 });
             }
         } catch (error) {
-            console.error('Error starting recording:', error);
-            setIsRecording(false);
-            hasStartedRecordingRef.current = false;
-            if (Platform.OS === 'android') {
-                ToastAndroid.show('Starting recording failed', ToastAndroid.LONG);
-            } else {
-                Alert.alert('Recording Error', 'Failed to start video recording.');
+            if (!endingRef.current) {
+                console.error('Error starting recording:', error);
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show('Starting recording failed', ToastAndroid.LONG);
+                } else {
+                    Alert.alert('Recording Error', 'Failed to start video recording.');
+                }
             }
         } finally {
             setIsRecording(false);
-            hasStartedRecordingRef.current = false;
+            startedRef.current = false;
         }
     };
 
-    const stopRecording = async () => {
-        if (!cameraRef.current || !isRecording) {
+    const stopRecording = () => {
+        if (!cameraRef.current || !isRecording || endingRef.current) {
             return;
         }
 
-        try {
-            console.log('Stopping recording...');
-            if (cameraRef.current) {
-                cameraRef.current.stopRecording();
-            }
-        } catch (error) {
-            console.error('Error stopping recording:', error);
-            Alert.alert('Recording Error', 'Failed to stop video recording.');
-        }
-    };
-
-    const handleEndCall = () => {
-        stopRecording();
-    };
-
-    const handleToggleFlash = () => {
-        setFlashEnabled((prev) => !prev);
+        endingRef.current = true;
+        stopCallBeep();
+        cameraRef.current.stopRecording();
     };
 
     const handleToggleView = () => {
-        setCurrentView((prev) =>
-            prev === 'fake-call' ? 'camera-preview' : 'fake-call'
-        );
+        setCurrentView((prev) => (prev === 'fake-call' ? 'camera-preview' : 'fake-call'));
     };
 
-    const handleToggleSpeakerTone = async () => {
-        await playCallBeep();
+    const handleToggleSpeakerTone = async (enabled: boolean) => {
+        await setCallBeepLoop(enabled);
     };
 
     const handleZoomIn = () => {
-        setZoomLevel((prev) => Math.min(0.9, Math.round((prev + 0.1) * 10) / 10));
+        setZoomLevel((prev) => Math.min(0.85, Math.round((prev + 0.1) * 10) / 10));
     };
 
     const handleZoomOut = () => {
         setZoomLevel((prev) => Math.max(0, Math.round((prev - 0.1) * 10) / 10));
     };
 
+    const shouldBlackOut = currentView === 'fake-call' && (isNearEar || screenBlackout);
+
     return (
         <View style={styles.container}>
-            {/* The single persistent CameraView - Switches between Full and PiP */}
             <View
                 style={currentView === 'fake-call' ? styles.hiddenCamera : styles.pipCamera}
                 pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
@@ -200,32 +195,27 @@ export default function RecordingScreen({
                 <CameraView
                     ref={cameraRef}
                     style={styles.camera}
-                    facing={cameraType}
+                    facing={initialCameraType}
                     mode="video"
                     zoom={zoomLevel}
                     enableTorch={flashEnabled}
-                    onCameraReady={() => {
-                        console.log('Camera ready');
-                        startRecording();
-                    }}
+                    onCameraReady={startRecording}
                 />
 
-                {currentView === 'camera-preview' && (
+                {currentView === 'camera-preview' ? (
                     <TouchableOpacity style={styles.pipClose} onPress={handleToggleView}>
                         <Ionicons name="close-circle" size={32} color="#fff" />
                     </TouchableOpacity>
-                )}
+                ) : null}
             </View>
 
-            {/* Fake Call Interface - Stays as background even in preview mode */}
-            <View style={[styles.overlayContainer, currentView === 'camera-preview' && { opacity: 0.5 }]}>
+            <View style={[styles.overlayContainer, currentView === 'camera-preview' && styles.dimmedOverlay]}>
                 <FakeCallInterface
                     callerName={callerName}
                     callerNumber={callerNumber}
                     duration={duration}
-                    zoomLevel={1 + zoomLevel}
-                    onEndCall={handleEndCall}
-                    onToggleFlash={handleToggleFlash}
+                    onEndCall={stopRecording}
+                    onToggleFlash={() => setFlashEnabled((prev) => !prev)}
                     onToggleView={handleToggleView}
                     onToggleSpeakerTone={handleToggleSpeakerTone}
                     onZoomIn={handleZoomIn}
@@ -234,10 +224,7 @@ export default function RecordingScreen({
                 />
             </View>
 
-            {/* Screen dimming overlay when phone is near ear */}
-            {isNearEar && currentView === 'fake-call' && (
-                <View style={styles.proximityOverlay} />
-            )}
+            {shouldBlackOut ? <View style={styles.proximityOverlay} pointerEvents="none" /> : null}
         </View>
     );
 }
@@ -259,10 +246,10 @@ const styles = StyleSheet.create({
     },
     pipCamera: {
         position: 'absolute',
-        top: 60,
-        right: 20,
-        width: 150,
-        height: 250,
+        top: 64,
+        right: 18,
+        width: 140,
+        height: 230,
         zIndex: 10,
         borderRadius: 12,
         overflow: 'hidden',
@@ -272,13 +259,16 @@ const styles = StyleSheet.create({
     },
     pipClose: {
         position: 'absolute',
-        top: 5,
-        right: 5,
+        top: 6,
+        right: 6,
         zIndex: 11,
     },
     overlayContainer: {
         ...StyleSheet.absoluteFillObject,
         zIndex: 1,
+    },
+    dimmedOverlay: {
+        opacity: 0.55,
     },
     proximityOverlay: {
         ...StyleSheet.absoluteFillObject,
