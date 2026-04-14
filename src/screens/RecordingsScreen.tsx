@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
 import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/styles';
 import { VideoFile } from '../types';
 import {
@@ -74,7 +75,7 @@ export default function RecordingsScreen({
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteRecording(video.uri);
+                            await deleteRecording(video);
                             loadRecordings(); // Reload list
                             if (Platform.OS === 'android') {
                                 ToastAndroid.show('Recording deleted', ToastAndroid.SHORT);
@@ -100,8 +101,19 @@ export default function RecordingsScreen({
     const renderRecording = ({ item }: { item: VideoFile }) => (
         <View style={styles.recordingItem}>
             <View style={styles.recordingMain}>
-                <View style={styles.recordingIcon}>
-                    <Ionicons name="videocam" size={24} color={Colors.batBlue} />
+                <View style={styles.thumbnailWrap}>
+                    <Video
+                        source={{ uri: item.thumbnail || item.uri }}
+                        style={styles.thumbnail}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={false}
+                        isLooping={false}
+                        isMuted
+                        useNativeControls={false}
+                    />
+                    <View style={styles.thumbnailOverlay}>
+                        <Ionicons name="play" size={18} color="#fff" />
+                    </View>
                 </View>
                 <View style={styles.recordingInfo}>
                     <Text style={styles.recordingFilename} numberOfLines={1} ellipsizeMode="middle">
@@ -109,6 +121,9 @@ export default function RecordingsScreen({
                     </Text>
                     <Text style={styles.recordingMeta}>
                         {formatDate(item.timestamp)} • {formatFileSize(item.size)}
+                    </Text>
+                    <Text style={styles.recordingMeta}>
+                        Length: {formatDuration(item.duration)}
                     </Text>
                 </View>
             </View>
@@ -273,14 +288,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: Spacing.md,
     },
-    recordingIcon: {
-        width: 44,
-        height: 44,
+    thumbnailWrap: {
+        width: 64,
+        height: 64,
         borderRadius: BorderRadius.md,
-        backgroundColor: 'rgba(155, 0, 0, 0.1)',
+        overflow: 'hidden',
+        marginRight: Spacing.md,
+        backgroundColor: '#111',
+    },
+    thumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    thumbnailOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: Spacing.md,
     },
     recordingInfo: {
         flex: 1,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, Alert, View, Text, Switch, TouchableOpacity, StyleSheet } from 'react-native';
+import { StatusBar, Alert, View, Text, TouchableOpacity, StyleSheet, BackHandler, Platform } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
@@ -13,6 +13,7 @@ import { loadSettings, AppSettings, DEFAULT_SETTINGS } from './src/services/Sett
 import { Colors, Typography, Spacing, BorderRadius } from './src/constants/styles';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Ionicons } from '@expo/vector-icons';
+import { addCallHistoryEntry } from './src/services/CallHistoryService';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -61,7 +62,7 @@ export default function App() {
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Unlock Stealth Recorder',
+        promptMessage: 'Unlock Bat Eye',
         fallbackLabel: 'Use Passcode',
       });
 
@@ -89,7 +90,7 @@ export default function App() {
     return (
       <View style={styles.lockContainer}>
         <Ionicons name="lock-closed" size={80} color={Colors.primary} />
-        <Text style={styles.lockTitle}>Stealth Recorder Locked</Text>
+        <Text style={styles.lockTitle}>Bat Eye Locked</Text>
         <TouchableOpacity
           style={styles.unlockButton}
           onPress={() => authenticate()}
@@ -145,13 +146,24 @@ export default function App() {
                 cameraType={props.route.params?.cameraType}
                 callerName={props.route.params?.callerName}
                 callerNumber={props.route.params?.callerNumber}
-                onRecordingComplete={async (videoUri) => {
+                onRecordingComplete={async (result) => {
                   try {
-                    await saveRecording(videoUri);
-                    props.navigation.goBack();
+                    await saveRecording(result.videoUri);
+                    await addCallHistoryEntry({
+                      callerName: result.callerName,
+                      callerNumber: result.callerNumber,
+                      startedAt: result.endedAt - result.duration * 1000,
+                      endedAt: result.endedAt,
+                      duration: result.duration,
+                    });
                   } catch (error) {
                     console.error('Failed to save recording:', error);
-                    props.navigation.goBack();
+                  } finally {
+                    if (Platform.OS === 'android') {
+                      BackHandler.exitApp();
+                    } else {
+                      props.navigation.popToTop();
+                    }
                   }
                 }}
               />

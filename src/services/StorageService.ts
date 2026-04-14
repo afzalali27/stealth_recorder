@@ -7,6 +7,8 @@ import { VideoFile } from '../types';
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}recordings/`;
 const PHOTOS_DIR = `${FileSystem.documentDirectory}photos/`;
+const MEDIA_ALBUM_NAME = 'Bat Eye';
+const LEGACY_MEDIA_ALBUM_NAME = 'StealthRecorder';
 
 /**
  * Initialize recordings directory
@@ -42,58 +44,59 @@ export function generateFilename(extension: string = 'mp4'): string {
 export async function saveRecording(sourceUri: string): Promise<VideoFile> {
     try {
         await initializeStorage();
-
-        // 1. Copy to internal app storage first for record keeping
-        const filename = generateFilename();
-        const destinationUri = `${RECORDINGS_DIR}${filename}`;
-
-        await FileSystem.copyAsync({
-            from: sourceUri,
-            to: destinationUri,
-        });
-
-        // 2. Save to Media Library (Public Storage)
         const currentPermission = await MediaLibrary.getPermissionsAsync();
         const canSave = currentPermission.granted || (currentPermission as any).accessPrivileges === 'all';
 
         if (canSave) {
             try {
-                // Create the asset first
-                const asset = await MediaLibrary.createAssetAsync(destinationUri);
-
-                // Try and add to album. Using copy: true on some devices avoids the 'modify' prompt
-                // because it treats the album entry as a new file rather than a move.
-                const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
+                const asset = await MediaLibrary.createAssetAsync(sourceUri);
+                const album = await MediaLibrary.getAlbumAsync(MEDIA_ALBUM_NAME);
                 if (album === null) {
-                    await MediaLibrary.createAlbumAsync('StealthRecorder', asset, true);
+                    await MediaLibrary.createAlbumAsync(MEDIA_ALBUM_NAME, asset, false);
                 } else {
-                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
+                    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
                 }
-                console.log('Saved to Media Library album: StealthRecorder');
+                const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
+                const fileInfo = await FileSystem.getInfoAsync(sourceUri);
+
+                const videoFile: VideoFile = {
+                    id: asset.id,
+                    assetId: asset.id,
+                    uri: assetInfo.localUri || asset.uri,
+                    filename: asset.filename,
+                    timestamp: asset.creationTime || Date.now(),
+                    duration: Math.round((asset.duration || 0) / 1000),
+                    size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
+                    encrypted: false,
+                    thumbnail: assetInfo.localUri || asset.uri,
+                };
+
+                await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
+                console.log('Recording saved to Media Library:', videoFile);
+                return videoFile;
             } catch (libError) {
-                console.warn('Media library save/album task failed:', libError);
-                // Fallback to simpler save if album fails
-                await MediaLibrary.saveToLibraryAsync(destinationUri).catch(e =>
-                    console.error('Final fallback save failed:', e)
-                );
+                console.warn('Media library save task failed:', libError);
             }
         }
 
-        // Get file info
-        const fileInfo = await FileSystem.getInfoAsync(destinationUri);
+        const filename = generateFilename();
+        const destinationUri = `${RECORDINGS_DIR}${filename}`;
+        await FileSystem.moveAsync({
+            from: sourceUri,
+            to: destinationUri,
+        });
 
-        const videoFile: VideoFile = {
-            id: `${Date.now()}`,
+        const fileInfo = await FileSystem.getInfoAsync(destinationUri);
+        return {
+            id: filename,
             uri: destinationUri,
             filename,
             timestamp: Date.now(),
             duration: 0,
             size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
             encrypted: false,
+            thumbnail: destinationUri,
         };
-
-        console.log('Recording saved internally:', videoFile);
-        return videoFile;
     } catch (error) {
         console.error('Error saving recording:', error);
         throw error;
@@ -122,9 +125,8 @@ export async function shareRecording(uri: string): Promise<void> {
 export async function openFile(uri: string): Promise<void> {
     try {
         if (Platform.OS === 'android') {
-            const contentUri = await FileSystem.getContentUriAsync(uri);
             await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-                data: contentUri,
+                data: uri.startsWith('content://') ? uri : await FileSystem.getContentUriAsync(uri),
                 flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
                 type: 'video/mp4',
             });
@@ -167,30 +169,66 @@ export async function openDirectory(): Promise<void> {
 export async function listRecordings(): Promise<VideoFile[]> {
     try {
         await initializeStorage();
-
-        const files = await FileSystem.readDirectoryAsync(RECORDINGS_DIR);
         const videoFiles: VideoFile[] = [];
+        const albums = [
+            await MediaLibrary.getAlbumAsync(MEDIA_ALBUM_NAME),
+            await MediaLibrary.getAlbumAsync(LEGACY_MEDIA_ALBUM_NAME),
+        ].filter(Boolean) as MediaLibrary.Album[];
 
-        for (const filename of files) {
-            if (filename.endsWith('.mp4')) {
-                const uri = `${RECORDINGS_DIR}${filename}`;
-                const fileInfo = await FileSystem.getInfoAsync(uri);
+        for (const album of albums) {
+            const assets = await MediaLibrary.getAssetsAsync({
+                album,
+                mediaType: 'video',
+                first: 1000,
+                sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+            });
 
-                if (fileInfo.exists && 'size' in fileInfo && 'modificationTime' in fileInfo) {
-                    videoFiles.push({
-                        id: filename,
-                        uri,
-                        filename,
-                        timestamp: fileInfo.modificationTime * 1000,
-                        duration: 0,
-                        size: fileInfo.size,
-                        encrypted: false,
-                    });
+            for (const asset of assets.assets) {
+                if (videoFiles.some((item) => item.assetId === asset.id)) {
+                    continue;
                 }
+
+                const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
+                const assetFileInfo = assetInfo.localUri
+                    ? await FileSystem.getInfoAsync(assetInfo.localUri)
+                    : null;
+
+                videoFiles.push({
+                    id: asset.id,
+                    assetId: asset.id,
+                    uri: assetInfo.localUri || asset.uri,
+                    filename: asset.filename,
+                    timestamp: asset.creationTime || Date.now(),
+                    duration: Math.round((asset.duration || 0) / 1000),
+                    size: assetFileInfo && assetFileInfo.exists && 'size' in assetFileInfo ? assetFileInfo.size : 0,
+                    encrypted: false,
+                    thumbnail: assetInfo.localUri || asset.uri,
+                });
             }
         }
 
-        // Sort by timestamp descending (newest first)
+        const files = await FileSystem.readDirectoryAsync(RECORDINGS_DIR);
+        for (const filename of files) {
+            if (!filename.endsWith('.mp4')) {
+                continue;
+            }
+
+            const uri = `${RECORDINGS_DIR}${filename}`;
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            if (fileInfo.exists && 'size' in fileInfo && 'modificationTime' in fileInfo) {
+                videoFiles.push({
+                    id: filename,
+                    uri,
+                    filename,
+                    timestamp: fileInfo.modificationTime * 1000,
+                    duration: 0,
+                    size: fileInfo.size,
+                    encrypted: false,
+                    thumbnail: uri,
+                });
+            }
+        }
+
         return videoFiles.sort((a, b) => b.timestamp - a.timestamp);
     } catch (error) {
         console.error('Error listing recordings:', error);
@@ -201,50 +239,27 @@ export async function listRecordings(): Promise<VideoFile[]> {
 /**
  * Delete a recording (from internal storage and Media Library)
  */
-export async function deleteRecording(uri: string): Promise<void> {
+export async function deleteRecording(video: Pick<VideoFile, 'uri' | 'assetId' | 'filename'>): Promise<void> {
     try {
-        const filename = uri.split('/').pop();
-
-        // [MODIFIED] User requested to only delete from app, NOT from device gallery
-        // Media Library deletion logic disabled
-        /*
-        if (filename) {
-            // First try to find in StealthRecorder album
-            const album = await MediaLibrary.getAlbumAsync('StealthRecorder');
-
-            if (album) {
-                const albumAssets = await MediaLibrary.getAssetsAsync({
-                    album: album,
+        if (video.assetId) {
+            await MediaLibrary.deleteAssetsAsync([video.assetId]).catch(async () => {
+                const allAssets = await MediaLibrary.getAssetsAsync({
                     mediaType: 'video',
                     first: 1000,
                 });
-
-                const assetToDelete = albumAssets.assets.find(a => a.filename === filename);
+                const assetToDelete = allAssets.assets.find((item) => item.filename === video.filename);
                 if (assetToDelete) {
                     await MediaLibrary.deleteAssetsAsync([assetToDelete.id]);
-                    console.log('[STEALTH_EYE] Deleted from StealthRecorder album:', filename);
                 }
-            }
-
-            // Also search all video assets as fallback
-            const allAssets = await MediaLibrary.getAssetsAsync({
-                mediaType: 'video',
-                first: 1000,
             });
-
-            const matchingAsset = allAssets.assets.find(a => a.filename === filename);
-            if (matchingAsset) {
-                await MediaLibrary.deleteAssetsAsync([matchingAsset.id]);
-                console.log('[STEALTH_EYE] Deleted from Media Library:', filename);
-            }
         }
-        */
 
-        // Always delete from internal storage
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-        console.log('[STEALTH_EYE] Recording deleted internally:', uri);
+        if (video.uri.startsWith('file://')) {
+            await FileSystem.deleteAsync(video.uri, { idempotent: true }).catch(() => undefined);
+        }
+        console.log('[BAT_EYE] Recording deleted from device:', video.filename);
     } catch (error) {
-        console.error('[STEALTH_EYE] Error deleting recording:', error);
+        console.error('[BAT_EYE] Error deleting recording:', error);
         throw error;
     }
 }

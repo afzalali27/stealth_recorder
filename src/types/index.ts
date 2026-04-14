@@ -32,6 +32,23 @@ export interface VideoFile {
     thumbnail?: string;
 }
 
+export interface CallRecordingResult {
+    videoUri: string;
+    duration: number;
+    callerName: string;
+    callerNumber: string;
+    endedAt: number;
+}
+
+export interface CallHistoryItem {
+    id: string;
+    callerName: string;
+    callerNumber: string;
+    startedAt: number;
+    endedAt: number;
+    duration: number;
+}
+
 export interface AppSettings {
     appLockEnabled: boolean;
     appPassword?: string;

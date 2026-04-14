@@ -1,20 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert, ToastAndroid, Platform, TouchableOpacity } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
 import FakeCallInterface from '../components/FakeCallInterface';
-import { RecordingState } from '../types';
+import { CallRecordingResult } from '../types';
 import { Ionicons } from '@expo/vector-icons';
-// import KeyEvent from 'react-native-keyevent'; // Removed to prevent iOS crash
-import * as MediaLibrary from 'expo-media-library';
-import { formatDuration, savePhoto } from '../services/StorageService';
+import { formatDuration } from '../services/StorageService';
 import { DeviceMotion } from 'expo-sensors';
+import { playCallBeep, unloadCallBeep } from '../services/CallAudioService';
 
 interface RecordingScreenProps {
     callerName?: string;
     callerNumber?: string;
     cameraType?: 'front' | 'back';
-    onRecordingComplete: (videoUri: string) => void;
+    onRecordingComplete: (result: CallRecordingResult) => void;
 }
 
 export default function RecordingScreen({
@@ -33,7 +32,10 @@ export default function RecordingScreen({
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isNearEar, setIsNearEar] = useState(false);
+    const [zoomLevel, setZoomLevel] = useState(0);
     const durationRef = useRef(0);
+    const callStartedAtRef = useRef(Date.now());
+    const hasStartedRecordingRef = useRef(false);
 
     // Proximity sensor for screen dimming (simulate ear detection)
     useEffect(() => {
@@ -59,6 +61,12 @@ export default function RecordingScreen({
         };
     }, []);
 
+    useEffect(() => {
+        return () => {
+            unloadCallBeep();
+        };
+    }, []);
+
     // Timer for call duration
     useEffect(() => {
         if (!isRecording) {
@@ -75,45 +83,6 @@ export default function RecordingScreen({
         return () => clearInterval(interval);
     }, [isRecording]);
 
-    const takePhoto = useCallback(async () => {
-        if (!cameraRef.current) {
-            console.warn('[STEALTH_EYE] Camera ref is null, cannot take photo');
-            return;
-        }
-
-        try {
-            console.log('[STEALTH_EYE] Attempting to capture photo...');
-
-            const photo = await cameraRef.current.takePictureAsync({
-                quality: 0.8,
-                // skipProcessing: true, // Removed for reliability on real devices
-                base64: false,
-                exif: false,
-            });
-
-            if (photo?.uri) {
-                console.log('[STEALTH_EYE] Photo captured:', photo.uri);
-                await savePhoto(photo.uri);
-                console.log('[STEALTH_EYE] Photo saved successfully');
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Stealth Photo Captured', ToastAndroid.SHORT);
-                }
-            } else {
-                console.warn('[STEALTH_EYE] Photo capture returned no URI');
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Capture Failed: No URI', ToastAndroid.SHORT);
-                }
-            }
-        } catch (error) {
-            console.error('[STEALTH_EYE] Photo capture failed:', error);
-            if (Platform.OS === 'android') {
-                // Convert error to string safely
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                ToastAndroid.show('Photo Capture Failed', ToastAndroid.SHORT);
-            }
-        }
-    }, []);
-
     // Key event listener for hardware volume buttons (Android only)
     useEffect(() => {
         if (Platform.OS !== 'android') return;
@@ -128,8 +97,7 @@ export default function RecordingScreen({
 
         const handleKeyDown = (keyEvent: any) => {
             if (keyEvent.keyCode === 24 || keyEvent.keyCode === 25) { // Volume Up or Down
-                console.log('[STEALTH_EYE] Volume button pressed, taking photo...');
-                takePhoto();
+                playCallBeep();
             }
         };
 
@@ -138,13 +106,15 @@ export default function RecordingScreen({
         return () => {
             KeyEvent.removeKeyDownListener();
         };
-    }, [takePhoto]);
+    }, []);
 
     const startRecording = async () => {
-        if (!cameraRef.current || isRecording) return;
+        if (!cameraRef.current || hasStartedRecordingRef.current) return;
 
         try {
             console.log('Starting recording...');
+            hasStartedRecordingRef.current = true;
+            callStartedAtRef.current = Date.now();
             setIsRecording(true);
             const video = await cameraRef.current.recordAsync({
                 maxDuration: 3600, // 1 hour max
@@ -153,14 +123,20 @@ export default function RecordingScreen({
             if (video?.uri) {
                 console.log('Recording completed:', video.uri);
                 if (Platform.OS === 'android') {
-                    // Use ref value to avoid closure issue
                     ToastAndroid.show(`Call ended (${formatDuration(durationRef.current)})`, ToastAndroid.SHORT);
                 }
-                onRecordingComplete(video.uri);
+                onRecordingComplete({
+                    videoUri: video.uri,
+                    duration: durationRef.current,
+                    callerName,
+                    callerNumber,
+                    endedAt: Date.now(),
+                });
             }
         } catch (error) {
             console.error('Error starting recording:', error);
             setIsRecording(false);
+            hasStartedRecordingRef.current = false;
             if (Platform.OS === 'android') {
                 ToastAndroid.show('Starting recording failed', ToastAndroid.LONG);
             } else {
@@ -168,6 +144,7 @@ export default function RecordingScreen({
             }
         } finally {
             setIsRecording(false);
+            hasStartedRecordingRef.current = false;
         }
     };
 
@@ -201,6 +178,18 @@ export default function RecordingScreen({
         );
     };
 
+    const handleToggleSpeakerTone = async () => {
+        await playCallBeep();
+    };
+
+    const handleZoomIn = () => {
+        setZoomLevel((prev) => Math.min(0.9, Math.round((prev + 0.1) * 10) / 10));
+    };
+
+    const handleZoomOut = () => {
+        setZoomLevel((prev) => Math.max(0, Math.round((prev - 0.1) * 10) / 10));
+    };
+
     return (
         <View style={styles.container}>
             {/* The single persistent CameraView - Switches between Full and PiP */}
@@ -213,6 +202,7 @@ export default function RecordingScreen({
                     style={styles.camera}
                     facing={cameraType}
                     mode="video"
+                    zoom={zoomLevel}
                     enableTorch={flashEnabled}
                     onCameraReady={() => {
                         console.log('Camera ready');
@@ -233,9 +223,13 @@ export default function RecordingScreen({
                     callerName={callerName}
                     callerNumber={callerNumber}
                     duration={duration}
+                    zoomLevel={1 + zoomLevel}
                     onEndCall={handleEndCall}
                     onToggleFlash={handleToggleFlash}
                     onToggleView={handleToggleView}
+                    onToggleSpeakerTone={handleToggleSpeakerTone}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
                     flashEnabled={flashEnabled}
                 />
             </View>

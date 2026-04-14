@@ -13,9 +13,13 @@ interface FakeCallInterfaceProps {
     callerName: string;
     callerNumber: string;
     duration: number; // in seconds
+    zoomLevel: number;
     onEndCall: () => void;
     onToggleFlash: () => void;
     onToggleView: () => void;
+    onToggleSpeakerTone: () => void;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
     flashEnabled: boolean;
 }
 
@@ -25,16 +29,18 @@ export default function FakeCallInterface({
     callerName,
     callerNumber,
     duration,
+    zoomLevel,
     onEndCall,
     onToggleFlash,
     onToggleView,
+    onToggleSpeakerTone,
+    onZoomIn,
+    onZoomOut,
     flashEnabled,
 }: FakeCallInterfaceProps) {
     const [muted, setMuted] = useState(false);
     const [speakerOn, setSpeakerOn] = useState(false);
     const [keypadVisible, setKeypadVisible] = useState(false);
-    const [holdActive, setHoldActive] = useState(false);
-    const [onAddCall, setOnAddCall] = useState(false);
 
     const formatDuration = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
@@ -64,7 +70,9 @@ export default function FakeCallInterface({
 
                 <View style={styles.statusContainer}>
                     <View style={styles.statusDot} />
-                    <Text style={styles.statusText}>In call • {formatDuration(duration)}</Text>
+                    <Text style={styles.statusText}>
+                        In call • {formatDuration(duration)} • Zoom {Math.max(1, zoomLevel).toFixed(1)}x
+                    </Text>
                 </View>
             </View>
 
@@ -99,7 +107,10 @@ export default function FakeCallInterface({
 
                     <TouchableOpacity
                         style={[styles.secondaryButton, speakerOn && styles.activeButton]}
-                        onPress={() => setSpeakerOn(!speakerOn)}
+                        onPress={() => {
+                            setSpeakerOn(!speakerOn);
+                            onToggleSpeakerTone();
+                        }}
                         activeOpacity={0.7}
                     >
                         <Ionicons
@@ -126,29 +137,29 @@ export default function FakeCallInterface({
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.secondaryButton, holdActive && styles.activeButton]}
-                        onPress={() => setHoldActive(!holdActive)}
+                        style={styles.secondaryButton}
+                        onPress={onZoomOut}
                         activeOpacity={0.7}
                     >
                         <Ionicons
-                            name={holdActive ? "pause" : "pause-outline"}
+                            name="remove-circle-outline"
                             size={28}
-                            color={holdActive ? Colors.callAccent : Colors.callText}
+                            color={Colors.callText}
                         />
-                        <Text style={[styles.buttonLabel, holdActive && styles.activeLabel]}>Hold</Text>
+                        <Text style={styles.buttonLabel}>Zoom Out</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.secondaryButton, onAddCall && styles.activeButton]}
-                        onPress={() => setOnAddCall(!onAddCall)}
+                        style={styles.secondaryButton}
+                        onPress={onZoomIn}
                         activeOpacity={0.7}
                     >
                         <Ionicons
-                            name={onAddCall ? "add" : "add-outline"}
+                            name="add-circle-outline"
                             size={28}
-                            color={onAddCall ? Colors.callAccent : Colors.callText}
+                            color={Colors.callText}
                         />
-                        <Text style={[styles.buttonLabel, onAddCall && styles.activeLabel]}>Add Call</Text>
+                        <Text style={styles.buttonLabel}>Zoom In</Text>
                     </TouchableOpacity>
                 </View>
             </View>
