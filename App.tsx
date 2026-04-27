@@ -9,10 +9,12 @@ import RecordingScreen from './src/screens/RecordingScreen';
 import RecordingsScreen from './src/screens/RecordingsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LogsScreen from './src/screens/LogsScreen';
+import ContactsScreen from './src/screens/ContactsScreen';
 import { saveRecording, openFile } from './src/services/StorageService';
 import { loadSettings, AppSettings, DEFAULT_SETTINGS } from './src/services/SettingsManager';
 import { Colors, Typography, Spacing, BorderRadius } from './src/constants/styles';
 import { addCallHistoryEntry } from './src/services/CallHistoryService';
+import { Contact } from './src/services/ContactsService';
 
 export type RootStackParamList = {
     Home: undefined;
@@ -24,6 +26,7 @@ export type RootStackParamList = {
     Recordings: undefined;
     Settings: undefined;
     Logs: undefined;
+    Contacts: { prefillNumber?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -112,18 +115,21 @@ export default function App() {
                 >
                     <Stack.Screen name="Home">
                         {(props) => (
-                            <HomeScreen
+                    <HomeScreen
                                 {...props}
                                 onStartRecording={(config) => {
                                     props.navigation.navigate('Recording', {
                                         cameraType: config.cameraType,
-                                        callerName: settings.callerName,
+                                        callerName: config.callerName || settings.callerName,
                                         callerNumber: config.callerNumber || settings.callerNumber,
                                     });
                                 }}
                                 onViewRecordings={() => props.navigation.navigate('Recordings')}
                                 onOpenSettings={() => props.navigation.navigate('Settings')}
                                 onOpenLogs={() => props.navigation.navigate('Logs')}
+                                onOpenContacts={(prefillNumber) =>
+                                    props.navigation.navigate('Contacts', prefillNumber ? { prefillNumber } : undefined)
+                                }
                             />
                         )}
                     </Stack.Screen>
@@ -137,7 +143,7 @@ export default function App() {
                                 callerNumber={props.route.params?.callerNumber}
                                 onRecordingComplete={async (result) => {
                                     try {
-                                        await saveRecording(result.videoUri);
+                                        await saveRecording(result.videoUri, result.duration);
                                         await addCallHistoryEntry({
                                             callerName: result.callerName,
                                             callerNumber: result.callerNumber,
@@ -185,7 +191,40 @@ export default function App() {
                     </Stack.Screen>
 
                     <Stack.Screen name="Logs">
-                        {(props) => <LogsScreen {...props} onBack={() => props.navigation.goBack()} />}
+                        {(props) => (
+                            <LogsScreen 
+                                {...props} 
+                                onBack={() => props.navigation.goBack()}
+                                onDialNumber={(number, name) => {
+                                    props.navigation.navigate('Recording', {
+                                        cameraType: settings.defaultCamera,
+                                        callerName: name || 'Unknown Caller',
+                                        callerNumber: number,
+                                    });
+                                }}
+                                onViewDetails={(item) => {
+                                    // TODO: Navigate to call details screen
+                                    console.log('View details for:', item);
+                                }}
+                            />
+                        )}
+                    </Stack.Screen>
+
+                    <Stack.Screen name="Contacts">
+                        {(props) => (
+                            <ContactsScreen
+                                {...props}
+                                onBack={() => props.navigation.goBack()}
+                                prefillNumber={props.route.params?.prefillNumber}
+                                onDial={(contact: Contact) => {
+                                    props.navigation.navigate('Recording', {
+                                        cameraType: settings.defaultCamera,
+                                        callerName: contact.name,
+                                        callerNumber: contact.number,
+                                    });
+                                }}
+                            />
+                        )}
                     </Stack.Screen>
                 </Stack.Navigator>
             </NavigationContainer>
