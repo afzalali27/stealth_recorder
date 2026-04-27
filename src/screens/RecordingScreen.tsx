@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, ToastAndroid, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, AppStateStatus, BackHandler, Platform, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
-import { DeviceMotion } from 'expo-sensors';
 import { Ionicons } from '@expo/vector-icons';
 import FakeCallInterface from '../components/FakeCallInterface';
 import { CallRecordingResult } from '../types';
 import { formatDuration } from '../services/StorageService';
 import { setCallBeepLoop, stopCallBeep, unloadCallBeep } from '../services/CallAudioService';
+import { proximityService } from '../services/ProximityService';
+import { Colors } from '../constants/styles';
 
 interface RecordingScreenProps {
     callerName?: string;
@@ -22,6 +23,7 @@ export default function RecordingScreen({
     cameraType: initialCameraType = 'back',
     onRecordingComplete,
 }: RecordingScreenProps) {
+    // Keep screen awake during entire recording session - fix the error
     useKeepAwake();
 
     const cameraRef = useRef<CameraView>(null);
@@ -36,34 +38,19 @@ export default function RecordingScreen({
     const [zoomLevel, setZoomLevel] = useState(0);
     const [isNearEar, setIsNearEar] = useState(false);
     const [screenBlackout, setScreenBlackout] = useState(false);
+    const [powerButtonPressed, setPowerButtonPressed] = useState(false);
 
     useEffect(() => {
-        let subscription: { remove: () => void } | undefined;
-
-        const startMotionTracking = async () => {
-            DeviceMotion.setUpdateInterval(250);
-            subscription = DeviceMotion.addListener((data) => {
-                const rotation = data.rotation;
-                const gravity = data.accelerationIncludingGravity;
-
-                const sideTilt =
-                    !!rotation &&
-                    Math.abs(rotation.gamma ?? 0) > 0.7 &&
-                    Math.abs(rotation.beta ?? 0) < 1.5;
-
-                const uprightGrip =
-                    !!gravity &&
-                    Math.abs(gravity.y ?? 0) > 7 &&
-                    Math.abs(gravity.z ?? 0) < 6;
-
-                setIsNearEar(sideTilt || uprightGrip);
-            });
+        // Setup proximity detection with simple screen blackout
+        const handleProximityChange = (isNear: boolean) => {
+            setIsNearEar(isNear);
+            // Just use visual blackout overlay, no brightness control
         };
 
-        startMotionTracking();
+        proximityService.addListener(handleProximityChange);
 
         return () => {
-            subscription?.remove();
+            proximityService.removeListener(handleProximityChange);
         };
     }, []);
 
@@ -94,26 +81,61 @@ export default function RecordingScreen({
             return;
         }
 
-        let KeyEvent: any;
-        try {
-            KeyEvent = require('react-native-keyevent').default;
-        } catch (error) {
-            console.warn('[BAT_EYE] KeyEvent module not found');
-            return;
-        }
-
-        const handleKeyDown = (keyEvent: { keyCode: number }) => {
-            if (keyEvent.keyCode === 26) {
-                setScreenBlackout((prev) => !prev);
+        // Simple app state handling - just track state changes
+        const handleAppStateChange = (nextState: AppStateStatus) => {
+            console.log('App state changed to:', nextState, 'Recording:', isRecording);
+            
+            if (isRecording) {
+                if (nextState === 'background' || nextState === 'inactive') {
+                    // App going to background - show blackout
+                    console.log('App going to background during recording');
+                    setPowerButtonPressed(true);
+                    setScreenBlackout(true);
+                } else if (nextState === 'active') {
+                    // App back to foreground - don't auto-remove blackout
+                    console.log('App back to active during recording');
+                    setPowerButtonPressed(false);
+                }
             }
         };
 
-        KeyEvent.onKeyDownListener(handleKeyDown);
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription.remove();
+    }, [isRecording]);
+
+    useEffect(() => {
+        if (Platform.OS !== 'android') {
+            return;
+        }
+
+        // Prevent back button from ending recording
+        const handleBackPress = () => {
+            if (isRecording) {
+                // Ignore back press during recording to prevent accidental exit
+                return true; // Prevent default back behavior
+            }
+            return false; // Allow default back behavior
+        };
+
+        const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+        return () => subscription.remove();
+    }, [isRecording]);
+
+    // Additional effect to aggressively prevent app exit during recording
+    useEffect(() => {
+        if (!isRecording) return;
+
+        const keepAliveInterval = setInterval(() => {
+            // This helps keep the app process alive during recording
+            if (isRecording) {
+                console.log('Recording active - keeping app alive');
+            }
+        }, 5000);
 
         return () => {
-            KeyEvent.removeKeyDownListener();
+            clearInterval(keepAliveInterval);
         };
-    }, []);
+    }, [isRecording]);
 
     const startRecording = async () => {
         if (!cameraRef.current || startedRef.current || endingRef.current || completedRef.current) {
@@ -184,7 +206,7 @@ export default function RecordingScreen({
         setZoomLevel((prev) => Math.max(0, Math.round((prev - 0.1) * 10) / 10));
     };
 
-    const shouldBlackOut = currentView === 'fake-call' && (isNearEar || screenBlackout);
+    const shouldBlackOut = currentView === 'fake-call' && (isNearEar || screenBlackout || powerButtonPressed);
 
     return (
         <View style={styles.container}>
@@ -222,9 +244,40 @@ export default function RecordingScreen({
                     onZoomOut={handleZoomOut}
                     flashEnabled={flashEnabled}
                 />
+                
+                {/* Manual screen blackout button */}
+                <TouchableOpacity 
+                    style={styles.blackoutButton}
+                    onPress={() => {
+                        console.log('Manual blackout toggle');
+                        setScreenBlackout((prev) => !prev);
+                    }}
+                >
+                    <Ionicons 
+                        name={screenBlackout ? "eye-outline" : "eye-off-outline"} 
+                        size={20} 
+                        color={Colors.callTextSecondary} 
+                    />
+                </TouchableOpacity>
             </View>
 
-            {shouldBlackOut ? <View style={styles.proximityOverlay} pointerEvents="none" /> : null}
+            {shouldBlackOut ? (
+                <View style={styles.proximityOverlay}>
+                    <TouchableOpacity 
+                        style={styles.blackoutTouchArea}
+                        activeOpacity={1}
+                        onPress={() => {
+                            console.log('Blackout overlay tapped - removing blackout');
+                            setScreenBlackout(false);
+                            setPowerButtonPressed(false);
+                        }}
+                    >
+                        <View style={styles.blackoutContent}>
+                            <Text style={styles.blackoutText}>Tap to turn screen on</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            ) : null}
         </View>
     );
 }
@@ -274,5 +327,30 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backgroundColor: '#000',
         zIndex: 100,
+    },
+    blackoutTouchArea: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    blackoutContent: {
+        alignItems: 'center',
+    },
+    blackoutText: {
+        color: '#333',
+        fontSize: 16,
+        opacity: 0.3,
+    },
+    blackoutButton: {
+        position: 'absolute',
+        top: 120,
+        right: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
     },
 });

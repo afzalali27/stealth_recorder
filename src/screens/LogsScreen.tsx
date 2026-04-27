@@ -7,10 +7,17 @@ import { clearCallHistory, getCallHistory } from '../services/CallHistoryService
 import { CallHistoryItem } from '../types';
 import { formatDuration } from '../services/StorageService';
 
+interface LogsScreenProps {
+    navigation?: any;
+    onBack: () => void;
+    onDialNumber?: (number: string, name?: string) => void;
+    onViewDetails?: (item: CallHistoryItem) => void;
+}
+
 const formatStamp = (value: number) =>
     new Date(value).toLocaleString();
 
-const LogsScreen = ({ navigation, onBack }: any) => {
+const LogsScreen = ({ navigation, onBack, onDialNumber, onViewDetails }: LogsScreenProps) => {
     const [history, setHistory] = useState<CallHistoryItem[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -46,15 +53,10 @@ const LogsScreen = ({ navigation, onBack }: any) => {
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.primary} />
                 </TouchableOpacity>
-                <Text style={styles.title}>CALL LOGS</Text>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={loadHistory} style={styles.iconButton}>
-                        <Ionicons name="refresh" size={24} color={Colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={clearLogs} style={styles.iconButton}>
-                        <Ionicons name="trash-outline" size={24} color={Colors.error} />
-                    </TouchableOpacity>
-                </View>
+                <Text style={styles.title}>Call Logs</Text>
+                <TouchableOpacity onPress={clearLogs} style={styles.iconButton}>
+                    <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                </TouchableOpacity>
             </View>
 
             {loading ? (
@@ -71,19 +73,31 @@ const LogsScreen = ({ navigation, onBack }: any) => {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item }) => (
-                        <View style={styles.logCard}>
-                            <View style={styles.logTopRow}>
-                                <View>
-                                    <Text style={styles.logName}>{item.callerName}</Text>
-                                    <Text style={styles.logNumber}>{item.callerNumber}</Text>
-                                </View>
-                                <View style={styles.durationBadge}>
-                                    <Text style={styles.durationText}>{formatDuration(item.duration)}</Text>
-                                </View>
+                        <TouchableOpacity 
+                            style={styles.logItem}
+                            onPress={() => onDialNumber?.(item.callerNumber, item.callerName)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.avatar}>
+                                <Ionicons name="person" size={24} color={Colors.textSecondary} />
                             </View>
-                            <Text style={styles.metaText}>Started: {formatStamp(item.startedAt)}</Text>
-                            <Text style={styles.metaText}>Ended: {formatStamp(item.endedAt)}</Text>
-                        </View>
+                            
+                            <View style={styles.logInfo}>
+                                <Text style={styles.logName}>{item.callerName}</Text>
+                                <Text style={styles.logNumber}>{item.callerNumber}</Text>
+                                <Text style={styles.logTime}>{formatStamp(item.startedAt)}</Text>
+                            </View>
+
+                            <TouchableOpacity 
+                                style={styles.infoButton}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onViewDetails?.(item);
+                                }}
+                            >
+                                <Ionicons name="information-circle-outline" size={24} color={Colors.textSecondary} />
+                            </TouchableOpacity>
+                        </TouchableOpacity>
                     )}
                 />
             )}
@@ -109,15 +123,14 @@ const styles = StyleSheet.create({
         padding: Spacing.sm,
     },
     title: {
+        flex: 1,
         fontSize: Typography.sizes.lg,
         fontWeight: Typography.weights.bold,
         color: Colors.text,
-    },
-    headerActions: {
-        flexDirection: 'row',
+        textAlign: 'center',
+        marginHorizontal: Spacing.md,
     },
     iconButton: {
-        marginLeft: Spacing.md,
         padding: Spacing.sm,
     },
     loader: {
@@ -142,47 +155,46 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     listContent: {
-        padding: Spacing.md,
+        paddingHorizontal: Spacing.md,
     },
-    logCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        marginBottom: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    logTopRow: {
+    logItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
+        paddingVertical: Spacing.lg,
+        paddingHorizontal: Spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: Colors.border,
+    },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: Colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: Spacing.md,
+    },
+    logInfo: {
+        flex: 1,
     },
     logName: {
         color: Colors.text,
         fontSize: Typography.sizes.md,
-        fontWeight: Typography.weights.bold,
+        fontWeight: Typography.weights.semibold,
+        marginBottom: 4,
     },
     logNumber: {
         color: Colors.textSecondary,
         fontSize: Typography.sizes.sm,
-        marginTop: 4,
+        marginBottom: 2,
     },
-    durationBadge: {
-        backgroundColor: 'rgba(155, 0, 0, 0.16)',
-        borderRadius: BorderRadius.round,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    durationText: {
-        color: Colors.primary,
-        fontSize: Typography.sizes.sm,
-        fontWeight: Typography.weights.semibold,
-    },
-    metaText: {
+    logTime: {
         color: Colors.textSecondary,
-        fontSize: Typography.sizes.sm,
-        marginTop: 4,
+        fontSize: Typography.sizes.xs,
+    },
+    infoButton: {
+        padding: Spacing.sm,
+        marginLeft: Spacing.sm,
     },
 });
 

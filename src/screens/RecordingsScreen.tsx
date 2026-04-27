@@ -24,6 +24,7 @@ import {
     formatFileSize,
     formatDuration,
     getStorageStats,
+    saveRecordingDuration,
 } from '../services/StorageService';
 
 interface RecordingsScreenProps {
@@ -39,6 +40,7 @@ export default function RecordingsScreen({
     const [refreshing, setRefreshing] = useState(false);
     const [storageStats, setStorageStats] = useState({ totalSize: 0, fileCount: 0 });
     const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+    const [durations, setDurations] = useState<Record<string, number>>({});
 
     useEffect(() => {
         loadRecordings();
@@ -51,28 +53,40 @@ export default function RecordingsScreen({
             setRecordings(files);
             setStorageStats(stats);
 
-            const thumbnailPairs = await Promise.all(
+            const thumbResults = await Promise.all(
                 files.map(async (file) => {
                     try {
                         const result = await VideoThumbnails.getThumbnailAsync(file.uri, {
                             time: 1000,
                             quality: 0.35,
                         });
-                        return [file.id, result.uri] as const;
-                    } catch (error) {
-                        return [file.id, ''] as const;
+                        // expo-video-thumbnails returns duration in ms on some platforms
+                        const durationSec = result.duration ? Math.round(result.duration / 1000) : 0;
+                        return { id: file.id, filename: file.id, uri: result.uri, durationSec } as const;
+                    } catch {
+                        return { id: file.id, filename: file.id, uri: '', durationSec: 0 } as const;
                     }
                 })
             );
 
-            setThumbnails(
-                thumbnailPairs.reduce<Record<string, string>>((acc, [id, uri]) => {
-                    if (uri) {
-                        acc[id] = uri;
-                    }
-                    return acc;
-                }, {})
-            );
+            const newThumbnails: Record<string, string> = {};
+            const newDurations: Record<string, number> = {};
+
+            for (const r of thumbResults) {
+                if (r.uri) newThumbnails[r.id] = r.uri;
+                // Use thumbnail-derived duration if stored duration is 0
+                const storedFile = files.find((f) => f.id === r.id);
+                const storedDuration = storedFile?.duration ?? 0;
+                if (r.durationSec > 0 && storedDuration === 0) {
+                    newDurations[r.id] = r.durationSec;
+                    await saveRecordingDuration(r.filename, r.durationSec);
+                } else {
+                    newDurations[r.id] = storedDuration;
+                }
+            }
+
+            setThumbnails(newThumbnails);
+            setDurations(newDurations);
         } catch (error) {
             console.error('Error loading recordings:', error);
             Alert.alert('Error', 'Failed to load recordings');
@@ -134,7 +148,7 @@ export default function RecordingsScreen({
                         <Ionicons name="play" size={14} color="#fff" />
                     </View>
                     <View style={styles.durationBadge}>
-                        <Text style={styles.durationBadgeText}>{formatDuration(item.duration)}</Text>
+                        <Text style={styles.durationBadgeText}>{formatDuration(durations[item.id] ?? item.duration)}</Text>
                     </View>
                 </View>
 

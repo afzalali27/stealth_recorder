@@ -5,6 +5,29 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform } from 'react-native';
 import { VideoFile } from '../types';
 
+const DURATIONS_PATH = `${FileSystem.documentDirectory || ''}recording_durations.json`;
+
+async function readDurations(): Promise<Record<string, number>> {
+    try {
+        const info = await FileSystem.getInfoAsync(DURATIONS_PATH);
+        if (!info.exists) return {};
+        const raw = await FileSystem.readAsStringAsync(DURATIONS_PATH, { encoding: 'utf8' });
+        return JSON.parse(raw) ?? {};
+    } catch {
+        return {};
+    }
+}
+
+async function writeDurations(map: Record<string, number>): Promise<void> {
+    await FileSystem.writeAsStringAsync(DURATIONS_PATH, JSON.stringify(map), { encoding: 'utf8' });
+}
+
+export async function saveRecordingDuration(filename: string, seconds: number): Promise<void> {
+    const map = await readDurations();
+    map[filename] = seconds;
+    await writeDurations(map);
+}
+
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}recordings/`;
 const PHOTOS_DIR = `${FileSystem.documentDirectory}photos/`;
 
@@ -30,7 +53,7 @@ export function generateFilename(extension: string = 'mp4'): string {
     return `recording_${timestamp}.${extension}`;
 }
 
-export async function saveRecording(sourceUri: string): Promise<VideoFile> {
+export async function saveRecording(sourceUri: string, durationSeconds?: number): Promise<VideoFile> {
     try {
         await initializeStorage();
 
@@ -47,12 +70,16 @@ export async function saveRecording(sourceUri: string): Promise<VideoFile> {
                 ? fileInfo.modificationTime * 1000
                 : Date.now();
 
+        if (durationSeconds && durationSeconds > 0) {
+            await saveRecordingDuration(filename, durationSeconds);
+        }
+
         return {
             id: filename,
             uri: destinationUri,
             filename,
             timestamp,
-            duration: 0,
+            duration: durationSeconds ?? 0,
             size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
             encrypted: false,
         };
@@ -117,6 +144,7 @@ export async function listRecordings(): Promise<VideoFile[]> {
         await initializeStorage();
 
         const files = await FileSystem.readDirectoryAsync(RECORDINGS_DIR);
+        const durations = await readDurations();
         const videoFiles: VideoFile[] = [];
 
         for (const filename of files) {
@@ -133,7 +161,7 @@ export async function listRecordings(): Promise<VideoFile[]> {
                     uri,
                     filename,
                     timestamp: fileInfo.modificationTime * 1000,
-                    duration: 0,
+                    duration: durations[filename] ?? 0,
                     size: fileInfo.size,
                     encrypted: false,
                 });

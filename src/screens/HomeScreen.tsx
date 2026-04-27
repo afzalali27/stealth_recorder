@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Animated,
     Easing,
     Image,
+    Modal,
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
     useWindowDimensions,
@@ -17,12 +19,20 @@ import { useIsFocused } from '@react-navigation/native';
 import { Colors, Typography, Spacing, BorderRadius, Layout } from '../constants/styles';
 import { ensurePermissions } from '../utils/permissions';
 import { loadSettings, saveSetting, STORAGE_KEYS } from '../services/SettingsManager';
+import {
+    Contact,
+    addContact,
+    findContactByNumber,
+    getContacts,
+    getDefaultContact,
+} from '../services/ContactsService';
 
 interface HomeScreenProps {
-    onStartRecording: (config: { cameraType: 'front' | 'back'; callerNumber?: string }) => void;
+    onStartRecording: (config: { cameraType: 'front' | 'back'; callerNumber?: string; callerName?: string }) => void;
     onViewRecordings: () => void;
     onOpenSettings: () => void;
     onOpenLogs: () => void;
+    onOpenContacts: (prefillNumber?: string) => void;
 }
 
 const DIAL_PAD = [
@@ -37,6 +47,7 @@ export default function HomeScreen({
     onViewRecordings,
     onOpenSettings,
     onOpenLogs,
+    onOpenContacts,
 }: HomeScreenProps) {
     const isFocused = useIsFocused();
     const { width } = useWindowDimensions();
@@ -44,17 +55,28 @@ export default function HomeScreen({
     const [hasPermissions, setHasPermissions] = useState(false);
     const [showDialer, setShowDialer] = useState(true);
     const [dialNumber, setDialNumber] = useState('');
-    const [savedIdentity, setSavedIdentity] = useState({
-        name: 'Unknown Caller',
-        number: '+1 (555) 123-4567',
-    });
+    const [defaultContact, setDefaultContact] = useState<Contact | null>(null);
+    const [contacts, setContacts] = useState<Contact[]>([]);
+    // Save-to-contacts modal
+    const [saveModalVisible, setSaveModalVisible] = useState(false);
+    const [saveModalName, setSaveModalName] = useState('');
+    const [saveModalNumber, setSaveModalNumber] = useState('');
     const dialerAnim = useRef(new Animated.Value(1)).current;
+
+    const loadData = useCallback(async () => {
+        const settings = await loadSettings();
+        setSelectedCamera(settings.defaultCamera);
+        const def = await getDefaultContact();
+        setDefaultContact(def);
+        const all = await getContacts();
+        setContacts(all);
+    }, []);
 
     useEffect(() => {
         if (isFocused) {
-            loadDefaultCamera();
+            loadData();
         }
-    }, [isFocused]);
+    }, [isFocused, loadData]);
 
     useEffect(() => {
         const init = async () => {
@@ -64,41 +86,25 @@ export default function HomeScreen({
         init();
     }, []);
 
-    const loadDefaultCamera = async () => {
-        const settings = await loadSettings();
-        setSelectedCamera(settings.defaultCamera);
-        setSavedIdentity({ name: settings.callerName, number: settings.callerNumber });
-    };
-
     const handleCameraToggle = async (type: 'front' | 'back') => {
         setSelectedCamera(type);
         await saveSetting(STORAGE_KEYS.DEFAULT_CAMERA, type);
     };
 
     const ensureCapturePermissions = async (): Promise<boolean> => {
-        if (hasPermissions) {
-            return true;
-        }
-
+        if (hasPermissions) return true;
         const granted = await ensurePermissions();
         if (!granted) {
-            Alert.alert(
-                'Permissions Required',
-                'Camera and microphone permissions are required to record video.'
-            );
+            Alert.alert('Permissions Required', 'Camera and microphone permissions are required.');
             return false;
         }
-
         setHasPermissions(true);
         return true;
     };
 
     const handleStartRecording = async () => {
         const ready = await ensureCapturePermissions();
-        if (!ready) {
-            return;
-        }
-
+        if (!ready) return;
         onStartRecording({ cameraType: selectedCamera });
     };
 
@@ -122,52 +128,71 @@ export default function HomeScreen({
 
     const handleDialerCall = async () => {
         const ready = await ensureCapturePermissions();
-        if (!ready) {
-            return;
+        if (!ready) return;
+
+        const typed = dialNumber.trim();
+
+        if (typed) {
+            // Check if number matches a contact
+            const match = await findContactByNumber(typed);
+            onStartRecording({
+                cameraType: selectedCamera,
+                callerNumber: typed,
+                callerName: match?.name,
+            });
+        } else {
+            // Dial default contact
+            if (defaultContact) {
+                onStartRecording({
+                    cameraType: selectedCamera,
+                    callerNumber: defaultContact.number,
+                    callerName: defaultContact.name,
+                });
+            } else {
+                Alert.alert('No Default', 'Add a contact and set it as default, or enter a number.');
+            }
         }
 
-        onStartRecording({
-            cameraType: selectedCamera,
-            callerNumber: dialNumber.trim() || savedIdentity.number,
-        });
         setDialNumber('');
     };
 
-    const activeIdentity = useMemo(() => {
-        const typed = dialNumber.trim();
-        return {
-            number: typed || savedIdentity.number,
-            label: typed ? 'Manual number' : savedIdentity.name,
-        };
-    }, [dialNumber, savedIdentity]);
-
-    const recentRows = useMemo(() => {
-        const rows = [
-            {
-                name: savedIdentity.name,
-                number: savedIdentity.number,
-                region: 'Pakistan',
-            },
-        ];
-
-        if (dialNumber.trim()) {
-            rows.unshift({
-                name: 'Dialing target',
-                number: dialNumber.trim(),
-                region: 'Manual',
-            });
+    const handleSaveNewContact = async () => {
+        const name = saveModalName.trim();
+        const number = saveModalNumber;
+        if (!name) {
+            Alert.alert('Name required', 'Please enter a name for this contact.');
+            return;
         }
+        await addContact(name, number);
+        setSaveModalVisible(false);
+        await loadData();
+    };
 
-        return rows.slice(0, 2);
-    }, [dialNumber, savedIdentity]);
+    // Matched contact for the typed number
+    const matchedContact = useMemo(() => {
+        const typed = dialNumber.trim();
+        if (!typed) return null;
+        const normalized = typed.replace(/\s+/g, '');
+        return contacts.find((c) => c.number.replace(/\s+/g, '') === normalized) ?? null;
+    }, [dialNumber, contacts]);
 
-    const dialButtonSize = Math.min(74, Math.max(62, Math.floor((width - 148) / 3)));
+    const displayNumber = dialNumber.trim() || '';
+    const displayLabel = dialNumber.trim()
+        ? matchedContact
+            ? matchedContact.name
+            : 'Unknown number'
+        : defaultContact
+        ? `${defaultContact.name} (default)`
+        : 'No default set';
+
+    const dialButtonSize = Math.min(80, Math.max(68, Math.floor((width - 80) / 3)));
     const dialPadWidth = dialButtonSize * 3 + 32;
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
 
+            {/* Home layer */}
             <Animated.View
                 style={[
                     styles.homeLayer,
@@ -211,20 +236,11 @@ export default function HomeScreen({
                     </TouchableOpacity>
 
                     <View style={styles.actionsContainer}>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={onViewRecordings}
-                            activeOpacity={0.8}
-                        >
+                        <TouchableOpacity style={styles.actionButton} onPress={onViewRecordings} activeOpacity={0.8}>
                             <Ionicons name="videocam" size={24} color={Colors.primary} />
                             <Text style={styles.actionButtonText}>VIDEOS</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={onOpenSettings}
-                            activeOpacity={0.8}
-                        >
+                        <TouchableOpacity style={styles.actionButton} onPress={onOpenSettings} activeOpacity={0.8}>
                             <Ionicons name="settings-sharp" size={24} color={Colors.primary} />
                             <Text style={styles.actionButtonText}>SETTINGS</Text>
                         </TouchableOpacity>
@@ -237,31 +253,19 @@ export default function HomeScreen({
                             style={[styles.rapidCameraButton, selectedCamera === 'front' && styles.rapidCameraActive]}
                             onPress={() => handleCameraToggle('front')}
                         >
-                            <Ionicons
-                                name="camera-reverse"
-                                size={20}
-                                color={selectedCamera === 'front' ? Colors.primary : Colors.textSecondary}
-                            />
+                            <Ionicons name="camera-reverse" size={20} color={selectedCamera === 'front' ? Colors.primary : Colors.textSecondary} />
                             <Text style={[styles.rapidCameraText, selectedCamera === 'front' && styles.rapidCameraActiveText]}>FRONT</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.rapidCameraButton, selectedCamera === 'back' && styles.rapidCameraActive]}
                             onPress={() => handleCameraToggle('back')}
                         >
-                            <Ionicons
-                                name="camera"
-                                size={20}
-                                color={selectedCamera === 'back' ? Colors.primary : Colors.textSecondary}
-                            />
+                            <Ionicons name="camera" size={20} color={selectedCamera === 'back' ? Colors.primary : Colors.textSecondary} />
                             <Text style={[styles.rapidCameraText, selectedCamera === 'back' && styles.rapidCameraActiveText]}>REAR</Text>
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.startButton}
-                        onPress={handleStartRecording}
-                        activeOpacity={0.84}
-                    >
+                    <TouchableOpacity style={styles.startButton} onPress={handleStartRecording} activeOpacity={0.84}>
                         <Ionicons name="flash" size={26} color="#FFFFFF" />
                         <View style={{ width: Spacing.md }} />
                         <Text style={styles.startButtonText}>DEPLOY</Text>
@@ -269,6 +273,7 @@ export default function HomeScreen({
                 </View>
             </Animated.View>
 
+            {/* Dialer overlay */}
             <Animated.View
                 style={[
                     styles.dialerOverlay,
@@ -286,75 +291,166 @@ export default function HomeScreen({
                 ]}
                 pointerEvents={showDialer ? 'auto' : 'none'}
             >
-                <View style={styles.dialerHeader}>
-                    <TouchableOpacity onPress={() => setDialerVisibility(false)} style={styles.headerBubbleButton}>
-                        <Ionicons name="home-outline" size={16} color={Colors.textSecondary} />
-                    </TouchableOpacity>
-                    <Text style={styles.dialerTitle}>BAT DIAL</Text>
-                    <TouchableOpacity onPress={onOpenLogs} style={styles.headerBubbleButton}>
-                        <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-                    </TouchableOpacity>
-                </View>
+                {/* Main content area */}
+                <View style={styles.dialerContent}>
+                    {/* Number display area - full width */}
+                    <View style={styles.numberSection}>
+                        {displayNumber ? (
+                            <>
+                                <Text style={styles.numberText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                                    {displayNumber}
+                                </Text>
+                                {/* Contact save option when typing unknown number */}
+                                {dialNumber.trim() && !matchedContact && (
+                                    <TouchableOpacity 
+                                        style={styles.newContactOption}
+                                        onPress={() => {
+                                            setSaveModalName('');
+                                            setSaveModalNumber(dialNumber.trim());
+                                            setSaveModalVisible(true);
+                                        }}
+                                    >
+                                        <Ionicons name="person-add-outline" size={20} color={Colors.textSecondary} />
+                                        <Text style={styles.newContactText}>New contact</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {matchedContact && (
+                                    <Text style={styles.contactLabel}>{matchedContact.name}</Text>
+                                )}
+                            </>
+                        ) : (
+                            <Text style={styles.placeholderText}>
+                                {defaultContact ? `Default: ${defaultContact.name}` : 'Enter number or add a contact'}
+                            </Text>
+                        )}
+                    </View>
 
-                <View style={styles.numberDisplay}>
-                    <Text style={styles.numberText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
-                        {activeIdentity.number}
-                    </Text>
-                    <Text style={styles.savedContactText}>{activeIdentity.label}</Text>
-                    {dialNumber.length > 0 ? (
-                        <TouchableOpacity onPress={handleBackspace} style={styles.backspaceButton}>
-                            <Ionicons name="backspace-outline" size={24} color={Colors.textSecondary} />
-                        </TouchableOpacity>
-                    ) : null}
-                </View>
-
-                <View style={styles.recentList}>
-                    {recentRows.map((row) => (
-                        <View key={`${row.name}-${row.number}`} style={styles.recentRow}>
-                            <View>
-                                <Text style={styles.recentName}>{row.name}</Text>
-                                <Text style={styles.recentNumber}>{row.number}</Text>
+                    {/* Dial pad - wider */}
+                    <View style={styles.dialPadContainer}>
+                        {DIAL_PAD.map((row, rowIndex) => (
+                            <View key={rowIndex} style={styles.dialRow}>
+                                {row.map((item) => (
+                                    <TouchableOpacity
+                                        key={item.num}
+                                        style={[styles.dialButton, { width: dialButtonSize, height: dialButtonSize, borderRadius: dialButtonSize / 2 }]}
+                                        onPress={() => handleDialPress(item.num)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.dialButtonNum}>{item.num}</Text>
+                                        <Text style={styles.dialButtonSub}>
+                                            {item.sub || ' '}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
-                            <View style={styles.recentRight}>
-                                <Text style={styles.recentRegion}>{row.region}</Text>
-                                <Ionicons name="information-circle-outline" size={18} color={Colors.textSecondary} />
-                            </View>
+                        ))}
+                    </View>
+
+                    {/* Call button and side actions */}
+                    <View style={styles.callSection}>
+                        <View style={styles.callRow}>
+                            <TouchableOpacity style={styles.sideButton} onPress={onOpenLogs}>
+                                <Ionicons name="time-outline" size={24} color={Colors.textSecondary} />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.callButton} onPress={handleDialerCall}>
+                                <Ionicons name="call" size={32} color="#fff" />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={styles.sideButton} 
+                                onPress={dialNumber ? handleBackspace : undefined}
+                                disabled={!dialNumber}
+                            >
+                                <Ionicons 
+                                    name="backspace-outline" 
+                                    size={24} 
+                                    color={dialNumber ? Colors.textSecondary : Colors.border} 
+                                />
+                            </TouchableOpacity>
                         </View>
-                    ))}
+                    </View>
                 </View>
 
-                <View style={[styles.dialPad, { width: dialPadWidth }]}>
-                    {DIAL_PAD.map((row, rowIndex) => (
-                        <View key={rowIndex} style={styles.dialRow}>
-                            {row.map((item) => (
-                                <TouchableOpacity
-                                    key={item.num}
-                                    style={[styles.dialButton, { width: dialButtonSize, height: dialButtonSize, borderRadius: dialButtonSize / 2 }]}
-                                    onPress={() => handleDialPress(item.num)}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text style={styles.dialButtonNum}>{item.num}</Text>
-                                    {item.sub ? <Text style={styles.dialButtonSub}>{item.sub}</Text> : <Text style={styles.dialButtonSub}> </Text>}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    ))}
-                </View>
-
-                <View style={[styles.dialerFooter, { width: dialPadWidth }]}>
-                    <TouchableOpacity style={styles.footerUtilityButton} onPress={onViewRecordings}>
-                        <Ionicons name="list-outline" size={22} color={Colors.textSecondary} />
+                {/* Bottom navigation bar */}
+                <View style={styles.bottomNav}>
+                    <TouchableOpacity style={styles.bottomNavButton} onPress={onOpenLogs}>
+                        <Ionicons name="call-outline" size={24} color={Colors.textSecondary} />
+                        <Text style={styles.bottomNavText}>Calls</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.callButton} onPress={handleDialerCall}>
-                        <Ionicons name="call" size={30} color="#fff" />
+                    <TouchableOpacity style={styles.bottomNavButton} onPress={() => setDialerVisibility(false)}>
+                        <Ionicons name="home-outline" size={24} color={Colors.textSecondary} />
+                        <Text style={styles.bottomNavText}>Home</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.footerUtilityButton} onPress={handleBackspace}>
-                        <Ionicons name="backspace-outline" size={22} color={Colors.textSecondary} />
+                    <TouchableOpacity style={styles.bottomNavButton} onPress={() => onOpenContacts()}>
+                        <Ionicons name="people-outline" size={24} color={Colors.textSecondary} />
+                        <Text style={styles.bottomNavText}>Contacts</Text>
                     </TouchableOpacity>
                 </View>
             </Animated.View>
+
+            {/* Save contact modal */}
+            <Modal
+                visible={saveModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSaveModalVisible(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalBox}>
+                        <Text style={styles.modalTitle}>Save Contact</Text>
+                        <Text style={styles.modalSubtitle}>{saveModalNumber}</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="Contact name"
+                            placeholderTextColor={Colors.textSecondary}
+                            value={saveModalName}
+                            onChangeText={setSaveModalName}
+                            autoCapitalize="words"
+                            autoFocus
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSaveModalVisible(false)}>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveNewContact}>
+                                <Text style={styles.modalSaveText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            {/* Save contact modal */}
+            <Modal
+                visible={saveModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSaveModalVisible(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalBox}>
+                        <Text style={styles.modalTitle}>Save Contact</Text>
+                        <Text style={styles.modalSubtitle}>{saveModalNumber}</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="Contact name"
+                            placeholderTextColor={Colors.textSecondary}
+                            value={saveModalName}
+                            onChangeText={setSaveModalName}
+                            autoCapitalize="words"
+                            autoFocus
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSaveModalVisible(false)}>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveNewContact}>
+                                <Text style={styles.modalSaveText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -376,9 +472,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
-    headerActions: {
-        flexDirection: 'row',
-    },
+    headerActions: { flexDirection: 'row' },
     title: {
         fontSize: Typography.sizes.xxl,
         fontWeight: '900',
@@ -388,10 +482,7 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 0, height: 2 },
         textShadowRadius: 4,
     },
-    settingsButton: {
-        padding: Spacing.sm,
-        marginLeft: 8,
-    },
+    settingsButton: { padding: Spacing.sm, marginLeft: 8 },
     content: {
         flex: 1,
         paddingHorizontal: Layout.screenPadding,
@@ -403,11 +494,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xl,
         height: 150,
     },
-    batLogo: {
-        width: 200,
-        height: 150,
-        opacity: 0.92,
-    },
+    batLogo: { width: 200, height: 150, opacity: 0.92 },
     actionsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -450,18 +537,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.lg,
         borderRadius: BorderRadius.round,
     },
-    rapidCameraActive: {
-        backgroundColor: Colors.secondary,
-    },
+    rapidCameraActive: { backgroundColor: Colors.secondary },
     rapidCameraText: {
         marginLeft: Spacing.xs,
         fontSize: Typography.sizes.xs,
         color: Colors.textSecondary,
         fontWeight: Typography.weights.semibold,
     },
-    rapidCameraActiveText: {
-        color: Colors.primary,
-    },
+    rapidCameraActiveText: { color: Colors.primary },
     startButton: {
         flexDirection: 'row',
         backgroundColor: Colors.primary,
@@ -483,146 +566,201 @@ const styles = StyleSheet.create({
         fontWeight: Typography.weights.bold,
         letterSpacing: 2,
     },
+    // Dialer
     dialerOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: Colors.background,
-        paddingHorizontal: 22,
-        paddingTop: 8,
-        paddingBottom: 18,
+        paddingHorizontal: 16,
+        justifyContent: 'space-between',
     },
-    dialerHeader: {
+    dialerTopBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 12,
+        paddingTop: 16,
+        paddingBottom: 8,
+        paddingHorizontal: 8,
     },
-    headerBubbleButton: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: Colors.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
+    topBarButton: {
+        padding: 8,
     },
     dialerTitle: {
         fontSize: Typography.sizes.md,
         fontWeight: Typography.weights.semibold,
         color: Colors.textSecondary,
-        letterSpacing: 2.4,
+        letterSpacing: 2,
     },
-    numberDisplay: {
-        alignItems: 'center',
+    dialerContent: {
+        flex: 1,
         justifyContent: 'center',
-        minHeight: 88,
-        marginTop: 6,
-        paddingHorizontal: 36,
+        alignItems: 'center',
+    },
+    numberSection: {
+        alignItems: 'center',
+        minHeight: 120,
+        justifyContent: 'center',
+        marginBottom: 32,
+        paddingHorizontal: 0, // Full width
     },
     numberText: {
-        fontSize: 26,
+        fontSize: 32,
         fontWeight: '300',
         color: Colors.text,
         letterSpacing: 2,
         textAlign: 'center',
-    },
-    savedContactText: {
-        marginTop: 6,
-        fontSize: Typography.sizes.sm,
-        color: Colors.textSecondary,
-        letterSpacing: 1.3,
-        textTransform: 'uppercase',
-    },
-    backspaceButton: {
-        position: 'absolute',
-        right: 4,
-        top: 24,
-        padding: 8,
-    },
-    recentList: {
-        marginTop: 4,
         marginBottom: 8,
+        width: '100%',
     },
-    recentRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: '#1c1c1c',
-    },
-    recentName: {
-        fontSize: Typography.sizes.md,
-        color: Colors.text,
-        fontWeight: Typography.weights.medium,
-    },
-    recentNumber: {
-        marginTop: 3,
+    contactLabel: {
         fontSize: Typography.sizes.sm,
-        color: '#5BB3B0',
-    },
-    recentRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    recentRegion: {
         color: Colors.textSecondary,
-        fontSize: Typography.sizes.sm,
-        marginRight: 8,
+        textAlign: 'center',
     },
-    dialPad: {
-        alignSelf: 'center',
-        marginTop: 12,
+    newContactOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginTop: 8,
+        alignSelf: 'flex-start',
+    },
+    newContactText: {
+        marginLeft: 12,
+        fontSize: Typography.sizes.md,
+        color: Colors.textSecondary,
+    },
+    placeholderText: {
+        fontSize: Typography.sizes.md,
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        fontStyle: 'italic',
+        width: '100%',
+    },
+    dialPadContainer: {
+        alignSelf: 'stretch', // Full width
+        paddingHorizontal: 24, // Small padding on sides
+        marginBottom: 24,
     },
     dialRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 14,
+        marginBottom: 16,
     },
     dialButton: {
-        backgroundColor: '#131313',
+        backgroundColor: Colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#1d1d1d',
+        borderColor: Colors.border,
     },
     dialButtonNum: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '400',
         color: Colors.text,
+        marginBottom: 2,
     },
     dialButtonSub: {
-        fontSize: 9,
+        fontSize: 10,
         color: Colors.textSecondary,
-        marginTop: 2,
-        letterSpacing: 0.7,
-        minHeight: 12,
+        letterSpacing: 0.5,
+        height: 12,
+        textAlign: 'center',
+        lineHeight: 12,
     },
-    dialerFooter: {
-        alignSelf: 'center',
+    callSection: {
+        alignSelf: 'stretch',
+        paddingHorizontal: 24, // Same as dial pad
+        marginBottom: 32,
+    },
+    callRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 4,
     },
-    footerUtilityButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+    sideButton: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
     },
     callButton: {
-        width: 68,
-        height: 68,
-        borderRadius: 34,
-        backgroundColor: '#1ED760',
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#1ED760', // Green call button
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#1ED760',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
         elevation: 8,
     },
+    bottomNav: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    bottomNavButton: {
+        alignItems: 'center',
+        paddingVertical: 8,
+    },
+    bottomNavText: {
+        marginTop: 4,
+        fontSize: Typography.sizes.xs,
+        color: Colors.textSecondary,
+    },
+    // Save modal
+    modalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: Spacing.xl,
+    },
+    modalBox: {
+        backgroundColor: Colors.surface,
+        borderRadius: BorderRadius.lg,
+        padding: Spacing.xl,
+        width: '100%',
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    modalTitle: {
+        color: Colors.text,
+        fontSize: Typography.sizes.lg,
+        fontWeight: Typography.weights.bold,
+        marginBottom: 4,
+    },
+    modalSubtitle: {
+        color: Colors.textSecondary,
+        fontSize: Typography.sizes.sm,
+        marginBottom: Spacing.md,
+    },
+    modalInput: {
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: BorderRadius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        color: Colors.text,
+        fontSize: Typography.sizes.md,
+        marginBottom: Spacing.md,
+    },
+    modalActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+    modalCancelBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, marginRight: Spacing.sm },
+    modalCancelText: { color: Colors.textSecondary, fontSize: Typography.sizes.md },
+    modalSaveBtn: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: Spacing.xl,
+        paddingVertical: Spacing.sm,
+        borderRadius: BorderRadius.md,
+    },
+    modalSaveText: { color: '#fff', fontSize: Typography.sizes.md, fontWeight: Typography.weights.semibold },
 });
