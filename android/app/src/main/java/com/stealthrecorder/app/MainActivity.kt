@@ -18,17 +18,11 @@ class MainActivity : ReactActivity() {
 // @generated begin react-native-keyevent-body - expo prebuild (DO NOT MODIFY) sync-4e643b1f863a7b24063f5e26e0cc2645f10e8742
 override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
   KeyEventModule.getInstance().onKeyDownEvent(keyCode, event)
-  if (keyCode == KeyEvent.KEYCODE_POWER) {
-    return true
-  }
   return super.onKeyDown(keyCode, event)
 }
 
 override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
   KeyEventModule.getInstance().onKeyUpEvent(keyCode, event)
-  if (keyCode == KeyEvent.KEYCODE_POWER) {
-    return true
-  }
   return super.onKeyUp(keyCode, event)
 }
 

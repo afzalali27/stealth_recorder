@@ -1,5 +1,5 @@
 import { Camera } from 'expo-camera';
-import { Alert, Platform } from 'react-native';
+import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native';
 
 export interface PermissionStatus {
     camera: boolean;
@@ -54,19 +54,33 @@ export function showPermissionDeniedAlert(permission: string) {
             {
                 text: 'Open Settings',
                 onPress: () => {
-                    if (Platform.OS === 'ios') {
-                        return;
-                    }
+                    Linking.openSettings().catch(() => undefined);
                 },
             },
         ]
     );
 }
 
+/**
+ * Requests the POST_NOTIFICATIONS permission (Android 13+) so the ongoing-call foreground
+ * notification is visible. Non-fatal — recording still works if this is denied.
+ */
+export async function requestNotificationPermission(): Promise<void> {
+    if (Platform.OS !== 'android' || Platform.Version < 33) return;
+    try {
+        await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+    } catch {
+        // ignore — notification visibility is optional
+    }
+}
+
 export async function ensurePermissions(): Promise<boolean> {
     const current = await checkAllPermissions();
 
     if (current.camera && current.microphone) {
+        await requestNotificationPermission();
         return true;
     }
 
@@ -82,5 +96,6 @@ export async function ensurePermissions(): Promise<boolean> {
         return false;
     }
 
+    await requestNotificationPermission();
     return true;
 }

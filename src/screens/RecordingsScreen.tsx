@@ -20,6 +20,7 @@ import {
     listRecordings,
     deleteRecording,
     shareRecording,
+    saveRecordingToGallery,
     openFile,
     formatFileSize,
     formatDuration,
@@ -61,7 +62,8 @@ export default function RecordingsScreen({
                             quality: 0.35,
                         });
                         // expo-video-thumbnails returns duration in ms on some platforms
-                        const durationSec = result.duration ? Math.round(result.duration / 1000) : 0;
+                        const rawDuration = (result as { duration?: number }).duration;
+                        const durationSec = rawDuration ? Math.round(rawDuration / 1000) : 0;
                         return { id: file.id, filename: file.id, uri: result.uri, durationSec } as const;
                     } catch {
                         return { id: file.id, filename: file.id, uri: '', durationSec: 0 } as const;
@@ -124,6 +126,33 @@ export default function RecordingsScreen({
         );
     };
 
+    const [savingId, setSavingId] = useState<string | null>(null);
+
+    const handleSaveToGallery = async (video: VideoFile) => {
+        if (savingId) return;
+        setSavingId(video.id);
+        try {
+            await saveRecordingToGallery(video.uri);
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Saved to gallery', ToastAndroid.SHORT);
+            } else {
+                Alert.alert('Saved', 'Recording saved to your gallery.');
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error && error.message === 'Gallery permission denied'
+                    ? 'Gallery permission is required to save videos.'
+                    : 'Failed to save to gallery.';
+            if (Platform.OS === 'android') {
+                ToastAndroid.show(message, ToastAndroid.LONG);
+            } else {
+                Alert.alert('Error', message);
+            }
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     const formatDate = (timestamp: number): string => new Date(timestamp).toLocaleString();
 
     const renderRecording = ({ item }: { item: VideoFile }) => (
@@ -172,6 +201,21 @@ export default function RecordingsScreen({
                 >
                     <Ionicons name="play-circle-outline" size={24} color={Colors.batBlue} />
                     <Text style={styles.actionLabel}>Play</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleSaveToGallery(item)}
+                    disabled={savingId === item.id}
+                >
+                    <Ionicons
+                        name={savingId === item.id ? 'hourglass-outline' : 'download-outline'}
+                        size={24}
+                        color={Colors.batBlue}
+                    />
+                    <Text style={styles.actionLabel}>
+                        {savingId === item.id ? 'Saving' : 'Gallery'}
+                    </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

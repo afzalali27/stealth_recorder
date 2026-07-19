@@ -15,7 +15,7 @@ interface FakeCallInterfaceProps {
     duration: number;
     onEndCall: () => void;
     onToggleFlash: () => void;
-    onToggleView: () => void;
+    onToggleView?: () => void;
     onToggleSpeakerTone: (enabled: boolean) => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
@@ -56,13 +56,15 @@ export default function FakeCallInterface({
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity
-                style={styles.viewToggle}
-                onPress={onToggleView}
-                activeOpacity={0.7}
-            >
-                <Ionicons name="eye-outline" size={22} color={Colors.callTextSecondary} />
-            </TouchableOpacity>
+            {onToggleView ? (
+                <TouchableOpacity
+                    style={styles.viewToggle}
+                    onPress={onToggleView}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="eye-outline" size={22} color={Colors.callTextSecondary} />
+                </TouchableOpacity>
+            ) : null}
 
             <View style={styles.topSection}>
                 <View style={styles.avatarPlaceholder}>

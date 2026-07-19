@@ -179,4 +179,13 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // CameraX for the background recording foreground service (matches expo-camera's version).
+    def camerax_version = "1.5.0-rc01"
+    implementation "androidx.camera:camera-core:${camerax_version}"
+    implementation "androidx.camera:camera-camera2:${camerax_version}"
+    implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+    implementation "androidx.camera:camera-video:${camerax_version}"
+    // Lifecycle runtime for the service-scoped LifecycleOwner used by CameraX.
+    implementation "androidx.lifecycle:lifecycle-runtime:2.8.7"
 }

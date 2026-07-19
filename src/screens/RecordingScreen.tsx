@@ -1,5 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, AppStateStatus, BackHandler, Platform, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    Alert,
+    BackHandler,
+    Platform,
+    StyleSheet,
+    ToastAndroid,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,14 +15,15 @@ import FakeCallInterface from '../components/FakeCallInterface';
 import { CallRecordingResult } from '../types';
 import { formatDuration } from '../services/StorageService';
 import { setCallBeepLoop, stopCallBeep, unloadCallBeep } from '../services/CallAudioService';
-import { proximityService } from '../services/ProximityService';
-import { Colors } from '../constants/styles';
+import { CallRecorder } from '../native/CallRecorder';
+import { ProximityLock } from '../native/ProximityLock';
 
 interface RecordingScreenProps {
     callerName?: string;
     callerNumber?: string;
     cameraType?: 'front' | 'back';
     onRecordingComplete: (result: CallRecordingResult) => void;
+    onCancel?: () => void;
 }
 
 export default function RecordingScreen({
@@ -22,38 +31,63 @@ export default function RecordingScreen({
     callerNumber = '+1 (555) 123-4567',
     cameraType: initialCameraType = 'back',
     onRecordingComplete,
+    onCancel,
 }: RecordingScreenProps) {
-    // Keep screen awake during entire recording session - fix the error
+    // Prevent the idle timeout from dimming the screen during a "call".
     useKeepAwake();
+
+    // On Android the camera is owned by a native foreground service so recording keeps
+    // running when the screen locks. Other platforms fall back to the in-app camera.
+    const useNativeRecorder = CallRecorder.isAvailable();
 
     const cameraRef = useRef<CameraView>(null);
     const startedRef = useRef(false);
     const endingRef = useRef(false);
     const completedRef = useRef(false);
     const durationRef = useRef(0);
+
     const [currentView, setCurrentView] = useState<'fake-call' | 'camera-preview'>('fake-call');
     const [flashEnabled, setFlashEnabled] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
     const [zoomLevel, setZoomLevel] = useState(0);
-    const [isNearEar, setIsNearEar] = useState(false);
-    const [screenBlackout, setScreenBlackout] = useState(false);
-    const [powerButtonPressed, setPowerButtonPressed] = useState(false);
 
+    const finalizeComplete = useCallback(
+        (uri: string, durationMsFromNative?: number) => {
+            if (completedRef.current) return;
+            completedRef.current = true;
+
+            const seconds =
+                durationMsFromNative && durationMsFromNative > 0
+                    ? Math.round(durationMsFromNative / 1000)
+                    : durationRef.current;
+
+            stopCallBeep();
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show(`Call ended (${formatDuration(seconds)})`, ToastAndroid.SHORT);
+            }
+
+            onRecordingComplete({
+                videoUri: uri,
+                duration: seconds,
+                callerName,
+                callerNumber,
+                endedAt: Date.now(),
+            });
+        },
+        [callerName, callerNumber, onRecordingComplete]
+    );
+
+    // Proximity screen-off for the duration of the call.
     useEffect(() => {
-        // Setup proximity detection with simple screen blackout
-        const handleProximityChange = (isNear: boolean) => {
-            setIsNearEar(isNear);
-            // Just use visual blackout overlay, no brightness control
-        };
-
-        proximityService.addListener(handleProximityChange);
-
+        ProximityLock.activate().catch(() => undefined);
         return () => {
-            proximityService.removeListener(handleProximityChange);
+            ProximityLock.deactivate();
         };
     }, []);
 
+    // Ringback / audio cleanup on unmount.
     useEffect(() => {
         return () => {
             stopCallBeep();
@@ -61,133 +95,110 @@ export default function RecordingScreen({
         };
     }, []);
 
+    // Duration counter while recording.
     useEffect(() => {
         if (!isRecording) {
-            durationRef.current = 0;
-            setDuration(0);
             return;
         }
-
         const interval = setInterval(() => {
             durationRef.current += 1;
             setDuration(durationRef.current);
         }, 1000);
-
         return () => clearInterval(interval);
     }, [isRecording]);
 
+    // Native recorder lifecycle.
     useEffect(() => {
-        if (Platform.OS !== 'android') {
-            return;
-        }
+        if (!useNativeRecorder) return;
 
-        // Simple app state handling - just track state changes
-        const handleAppStateChange = (nextState: AppStateStatus) => {
-            console.log('App state changed to:', nextState, 'Recording:', isRecording);
-            
-            if (isRecording) {
-                if (nextState === 'background' || nextState === 'inactive') {
-                    // App going to background - show blackout
-                    console.log('App going to background during recording');
-                    setPowerButtonPressed(true);
-                    setScreenBlackout(true);
-                } else if (nextState === 'active') {
-                    // App back to foreground - don't auto-remove blackout
-                    console.log('App back to active during recording');
-                    setPowerButtonPressed(false);
+        const subscription = CallRecorder.addListener((event) => {
+            if (event.event === 'started') {
+                setIsRecording(true);
+            } else if (event.event === 'finalized' && event.uri) {
+                finalizeComplete(event.uri, event.durationMs);
+            } else if (event.event === 'error') {
+                if (!completedRef.current) {
+                    completedRef.current = true;
+                    if (Platform.OS === 'android') {
+                        ToastAndroid.show('Recording failed to start', ToastAndroid.LONG);
+                    }
+                    onCancel?.();
                 }
             }
-        };
+        });
 
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
-        return () => subscription.remove();
-    }, [isRecording]);
-
-    useEffect(() => {
-        if (Platform.OS !== 'android') {
-            return;
-        }
-
-        // Prevent back button from ending recording
-        const handleBackPress = () => {
-            if (isRecording) {
-                // Ignore back press during recording to prevent accidental exit
-                return true; // Prevent default back behavior
-            }
-            return false; // Allow default back behavior
-        };
-
-        const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
-        return () => subscription.remove();
-    }, [isRecording]);
-
-    // Additional effect to aggressively prevent app exit during recording
-    useEffect(() => {
-        if (!isRecording) return;
-
-        const keepAliveInterval = setInterval(() => {
-            // This helps keep the app process alive during recording
-            if (isRecording) {
-                console.log('Recording active - keeping app alive');
-            }
-        }, 5000);
+        startedRef.current = true;
+        CallRecorder.start(initialCameraType, false)
+            .then(() => setIsRecording(true))
+            .catch((error) => {
+                console.error('Native recorder start failed:', error);
+                if (!completedRef.current) {
+                    completedRef.current = true;
+                    if (Platform.OS === 'android') {
+                        ToastAndroid.show('Recording failed to start', ToastAndroid.LONG);
+                    }
+                    onCancel?.();
+                }
+            });
 
         return () => {
-            clearInterval(keepAliveInterval);
+            subscription.remove();
+            // If we leave without an explicit End Call, make sure the service stops.
+            if (!completedRef.current) {
+                CallRecorder.stop().catch(() => undefined);
+            }
         };
+    }, [useNativeRecorder, initialCameraType, finalizeComplete, onCancel]);
+
+    // Block the hardware back button during a call so it isn't ended by accident.
+    useEffect(() => {
+        if (Platform.OS !== 'android') return;
+        const subscription = BackHandler.addEventListener('hardwareBackPress', () => isRecording);
+        return () => subscription.remove();
     }, [isRecording]);
 
-    const startRecording = async () => {
+    // Fallback recorder (non-Android): start when the in-app camera is ready.
+    const startFallbackRecording = async () => {
+        if (useNativeRecorder) return;
         if (!cameraRef.current || startedRef.current || endingRef.current || completedRef.current) {
             return;
         }
-
         try {
             startedRef.current = true;
             setIsRecording(true);
-
-            const video = await cameraRef.current.recordAsync({
-                maxDuration: 3600,
-            });
-
-            if (video?.uri && !completedRef.current) {
-                completedRef.current = true;
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show(`Call ended (${formatDuration(durationRef.current)})`, ToastAndroid.SHORT);
-                }
-
-                await stopCallBeep();
-                onRecordingComplete({
-                    videoUri: video.uri,
-                    duration: durationRef.current,
-                    callerName,
-                    callerNumber,
-                    endedAt: Date.now(),
-                });
+            const video = await cameraRef.current.recordAsync({ maxDuration: 3600 });
+            if (video?.uri) {
+                finalizeComplete(video.uri);
             }
         } catch (error) {
             if (!endingRef.current) {
                 console.error('Error starting recording:', error);
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Starting recording failed', ToastAndroid.LONG);
-                } else {
-                    Alert.alert('Recording Error', 'Failed to start video recording.');
-                }
+                Alert.alert('Recording Error', 'Failed to start video recording.');
+                onCancel?.();
             }
         } finally {
             setIsRecording(false);
-            startedRef.current = false;
         }
     };
 
-    const stopRecording = () => {
-        if (!cameraRef.current || !isRecording || endingRef.current) {
-            return;
-        }
-
+    const stopRecording = async () => {
+        if (endingRef.current) return;
         endingRef.current = true;
         stopCallBeep();
-        cameraRef.current.stopRecording();
+
+        if (useNativeRecorder) {
+            try {
+                const result = await CallRecorder.stop();
+                if (result?.uri) {
+                    finalizeComplete(result.uri, result.durationMs);
+                }
+            } catch (error) {
+                console.error('Native recorder stop failed:', error);
+                onCancel?.();
+            }
+        } else {
+            cameraRef.current?.stopRecording();
+        }
     };
 
     const handleToggleView = () => {
@@ -198,86 +209,60 @@ export default function RecordingScreen({
         await setCallBeepLoop(enabled);
     };
 
-    const handleZoomIn = () => {
-        setZoomLevel((prev) => Math.min(0.85, Math.round((prev + 0.1) * 10) / 10));
+    const handleToggleFlash = () => {
+        setFlashEnabled((prev) => {
+            const next = !prev;
+            if (useNativeRecorder) CallRecorder.setTorch(next);
+            return next;
+        });
     };
 
-    const handleZoomOut = () => {
-        setZoomLevel((prev) => Math.max(0, Math.round((prev - 0.1) * 10) / 10));
+    const applyZoom = (next: number) => {
+        setZoomLevel(next);
+        if (useNativeRecorder) CallRecorder.setZoom(next);
     };
 
-    const shouldBlackOut = currentView === 'fake-call' && (isNearEar || screenBlackout || powerButtonPressed);
+    const handleZoomIn = () => applyZoom(Math.min(0.85, Math.round((zoomLevel + 0.1) * 10) / 10));
+    const handleZoomOut = () => applyZoom(Math.max(0, Math.round((zoomLevel - 0.1) * 10) / 10));
 
     return (
         <View style={styles.container}>
-            <View
-                style={currentView === 'fake-call' ? styles.hiddenCamera : styles.pipCamera}
-                pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
-            >
-                <CameraView
-                    ref={cameraRef}
-                    style={styles.camera}
-                    facing={initialCameraType}
-                    mode="video"
-                    zoom={zoomLevel}
-                    enableTorch={flashEnabled}
-                    onCameraReady={startRecording}
-                />
+            {!useNativeRecorder && (
+                <View
+                    style={currentView === 'fake-call' ? styles.hiddenCamera : styles.pipCamera}
+                    pointerEvents={currentView === 'fake-call' ? 'none' : 'auto'}
+                >
+                    <CameraView
+                        ref={cameraRef}
+                        style={styles.camera}
+                        facing={initialCameraType}
+                        mode="video"
+                        zoom={zoomLevel}
+                        enableTorch={flashEnabled}
+                        onCameraReady={startFallbackRecording}
+                    />
+                    {currentView === 'camera-preview' ? (
+                        <TouchableOpacity style={styles.pipClose} onPress={handleToggleView}>
+                            <Ionicons name="close-circle" size={32} color="#fff" />
+                        </TouchableOpacity>
+                    ) : null}
+                </View>
+            )}
 
-                {currentView === 'camera-preview' ? (
-                    <TouchableOpacity style={styles.pipClose} onPress={handleToggleView}>
-                        <Ionicons name="close-circle" size={32} color="#fff" />
-                    </TouchableOpacity>
-                ) : null}
-            </View>
-
-            <View style={[styles.overlayContainer, currentView === 'camera-preview' && styles.dimmedOverlay]}>
+            <View style={styles.overlayContainer}>
                 <FakeCallInterface
                     callerName={callerName}
                     callerNumber={callerNumber}
                     duration={duration}
                     onEndCall={stopRecording}
-                    onToggleFlash={() => setFlashEnabled((prev) => !prev)}
-                    onToggleView={handleToggleView}
+                    onToggleFlash={handleToggleFlash}
+                    onToggleView={useNativeRecorder ? undefined : handleToggleView}
                     onToggleSpeakerTone={handleToggleSpeakerTone}
                     onZoomIn={handleZoomIn}
                     onZoomOut={handleZoomOut}
                     flashEnabled={flashEnabled}
                 />
-                
-                {/* Manual screen blackout button */}
-                <TouchableOpacity 
-                    style={styles.blackoutButton}
-                    onPress={() => {
-                        console.log('Manual blackout toggle');
-                        setScreenBlackout((prev) => !prev);
-                    }}
-                >
-                    <Ionicons 
-                        name={screenBlackout ? "eye-outline" : "eye-off-outline"} 
-                        size={20} 
-                        color={Colors.callTextSecondary} 
-                    />
-                </TouchableOpacity>
             </View>
-
-            {shouldBlackOut ? (
-                <View style={styles.proximityOverlay}>
-                    <TouchableOpacity 
-                        style={styles.blackoutTouchArea}
-                        activeOpacity={1}
-                        onPress={() => {
-                            console.log('Blackout overlay tapped - removing blackout');
-                            setScreenBlackout(false);
-                            setPowerButtonPressed(false);
-                        }}
-                    >
-                        <View style={styles.blackoutContent}>
-                            <Text style={styles.blackoutText}>Tap to turn screen on</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-            ) : null}
         </View>
     );
 }
@@ -319,38 +304,5 @@ const styles = StyleSheet.create({
     overlayContainer: {
         ...StyleSheet.absoluteFillObject,
         zIndex: 1,
-    },
-    dimmedOverlay: {
-        opacity: 0.55,
-    },
-    proximityOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#000',
-        zIndex: 100,
-    },
-    blackoutTouchArea: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    blackoutContent: {
-        alignItems: 'center',
-    },
-    blackoutText: {
-        color: '#333',
-        fontSize: 16,
-        opacity: 0.3,
-    },
-    blackoutButton: {
-        position: 'absolute',
-        top: 120,
-        right: 20,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
     },
 });

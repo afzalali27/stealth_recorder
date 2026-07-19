@@ -89,6 +89,29 @@ export async function saveRecording(sourceUri: string, durationSeconds?: number)
     }
 }
 
+const GALLERY_ALBUM = 'BatEye';
+
+/**
+ * Copies a recording that normally lives only inside the app into the device gallery
+ * (Photos / gallery apps) via the media library, in a dedicated album.
+ */
+export async function saveRecordingToGallery(uri: string): Promise<void> {
+    const permission = await MediaLibrary.requestPermissionsAsync();
+    const canWrite =
+        permission.granted || (permission as any).accessPrivileges === 'all';
+    if (!canWrite) {
+        throw new Error('Gallery permission denied');
+    }
+
+    const asset = await MediaLibrary.createAssetAsync(uri);
+    const album = await MediaLibrary.getAlbumAsync(GALLERY_ALBUM);
+    if (album === null) {
+        await MediaLibrary.createAlbumAsync(GALLERY_ALBUM, asset, false);
+    } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+    }
+}
+
 export async function shareRecording(uri: string): Promise<void> {
     try {
         const canShare = await Sharing.isAvailableAsync();

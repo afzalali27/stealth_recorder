@@ -141,6 +141,12 @@ export default function App() {
                                 cameraType={props.route.params?.cameraType}
                                 callerName={props.route.params?.callerName}
                                 callerNumber={props.route.params?.callerNumber}
+                                onCancel={() => {
+                                    props.navigation.reset({
+                                        index: 0,
+                                        routes: [{ name: 'Home' }],
+                                    });
+                                }}
                                 onRecordingComplete={async (result) => {
                                     try {
                                         await saveRecording(result.videoUri, result.duration);
